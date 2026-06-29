@@ -134,7 +134,8 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
     //Mutable global state
     public ulong whiteAttackingSquares;
     public ulong blackAttackingSquares;
-    private Dictionary<ulong, ulong> pinnedSquaresAndPinningPiece = new Dictionary<ulong, ulong>(); // Key is squares that a will be pinned and value is the square index of the piece doing the pinning
+    private (ulong, int)[] pinnedSquaresAndPinningPiece = new (ulong, int)[8];
+    private int pinningPiecesCount;
     private ulong checkMask;
     private Move[] moveList = new Move[218];
     private int moveIndex = 0;
@@ -415,7 +416,7 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
     }
     private void generatePinMask(bool isWhite)
     {
-        pinnedSquaresAndPinningPiece.Clear();
+        pinningPiecesCount = 0;
         int kingSquare = BitScanner.BitScanForward(board.GetBitboard(Piece.uncoloredKing, isWhite));
         ulong[] pinnedPiecesCandidates = GetKingXRaySliderCanidadates(isWhite, kingSquare);
         for (int i = 0; i < 2; i++)
@@ -426,7 +427,8 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
                 ulong squaresBetweenPieceAndKing = squaresBetween[pinningPieceSquare, kingSquare];
                 if (math.countbits(squaresBetweenPieceAndKing & board.GetAllBlockersBitboard(isWhite)) == 1) // If the number of blockers is 1, then that piece is pinned
                 {
-                    pinnedSquaresAndPinningPiece.Add(squaresBetweenPieceAndKing, 1ul << pinningPieceSquare);
+                    pinnedSquaresAndPinningPiece[pinningPiecesCount] = (squaresBetweenPieceAndKing, pinningPieceSquare);
+                    pinningPiecesCount++;
                 }
                 pinnedPiecesCandidates[i] &= ~(1ul << pinningPieceSquare);
             }
@@ -462,22 +464,22 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
     }
 
 
-    private ulong getPinKey(int pieceSquare)
+    private int getPinIndex(int pieceSquare)
     {
-        foreach (ulong pinnedSquares in pinnedSquaresAndPinningPiece.Keys)
+        for(int i = 0; i < pinningPiecesCount; i++)
         {
-            if (((1ul << pieceSquare) & pinnedSquares) != 0ul)
+            if (((1ul << pieceSquare) & pinnedSquaresAndPinningPiece[i].Item1)!=0)
             {
-                return pinnedSquares;
+                return i;
             }
         }
-        return 0ul;
+        return -1;
     }
     private ulong getPinMask(int pieceSquare, bool isWhite)
     {
-        ulong pinnedSquares = getPinKey(pieceSquare);
-        if (pinnedSquares == 0ul) return ~0ul;
-        return pinnedSquares | pinnedSquaresAndPinningPiece[pinnedSquares]; // A pinned piece can move along the pin or capture the piece
+        int pinIndex = getPinIndex(pieceSquare);
+        if (pinIndex == -1) return ~0ul;
+        return pinnedSquaresAndPinningPiece[pinIndex].Item1 | (1ul<<pinnedSquaresAndPinningPiece[pinIndex].Item2); // A pinned piece can move along the pin or capture the piece
     }
     private ulong generatePawnMoves(bool isWhite, bool addMove)
     {

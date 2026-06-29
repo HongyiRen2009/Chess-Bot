@@ -241,9 +241,8 @@ public class Board
         return capturePiece;
     }
 
-    public void makeMove(Move move)
+    public void makeMove(ref Move move)
     {
-        if (move == null) return;
         switch (move.movePiece)
         {
             case Piece.whiteKing:
@@ -305,7 +304,6 @@ public class Board
 
         if (move.isCastling)
         {
-            move.isRemovingCastlingPrivilege = true;
             if (move.isWhite)
             {
                 bitBoards[Piece.whiteKing] = 1ul << move.s2;
@@ -405,9 +403,8 @@ public class Board
 
         generateCombinedBitboards();
     }
-    public void unMakeMove(Move move)
+    public void unMakeMove(ref Move move)
     {
-        if (move == null) return;
         if (move.isRemovingCastlingPrivilege)
         {
             switch (move.movePiece)

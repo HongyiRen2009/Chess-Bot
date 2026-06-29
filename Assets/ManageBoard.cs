@@ -65,7 +65,7 @@ public class ManageBoard : MonoBehaviour
         clearCircles();
         for(int i = 0; i < moves.Length; i++)
         {
-            if (moves[i] == null) break;
+            if (moves[i].Equals(default)) break;
             if (moves[i].s1 == startSquare)
             {
                 GameObject currBoardCircle = Instantiate(boardCircles, boardCirclesTransform);
@@ -84,13 +84,13 @@ public class ManageBoard : MonoBehaviour
         string filePath = Path.Combine(Application.dataPath, "moves.txt");
         foreach (Move move in moves)
         {
-            content += move.s1 + " " + move.s2 + utils.pieceToString[move.promotionPiece] +"\n";
+            content += move.s1 + " " + move.s2 + Utils.pieceToString[move.promotionPiece] +"\n";
         }
         File.WriteAllText(filePath, content);
     }
     public void unMakeLastMove()
     {
-        if (lastMove == null) return;
+        if (lastMove.Equals(null)) return;
 
         pieces[lastMove.s1] = pieces[lastMove.s2];
         pieces[lastMove.s2] = null;
@@ -133,16 +133,16 @@ public class ManageBoard : MonoBehaviour
                 }
             }
         }
-        chessEngine.unMakeMove(lastMove);
+        chessEngine.unMakeMove(ref lastMove);
         moves = chessEngine.GetCurrentLegalMoves();
-        lastMove = null;
+        lastMove = default;
     }
     public void FinishedDraggingChessPiece(int startSquare,int endSquare)
     {
         clearCircles();
         for (int i = 0; i < moves.Length; i++)
         {
-            if (moves[i] == null) break;
+            if (moves[i].Equals(default)) break;
             if (moves[i].s1 != startSquare || moves[i].s2 != endSquare) continue;
             lastMove = moves[i];
             if (pieces[endSquare] != null)
@@ -185,7 +185,7 @@ public class ManageBoard : MonoBehaviour
                 Destroy(pieces[endSquare+(moves[i].isWhite ? 8:-8)].gameObject);
             }
             pieces[endSquare].setPosition(endSquare);
-            chessEngine.makeMove(moves[i]);
+            chessEngine.makeMove(ref moves[i]);
             moves = chessEngine.GetCurrentLegalMoves();
             //string content = "";
             //foreach(Move move in moves)

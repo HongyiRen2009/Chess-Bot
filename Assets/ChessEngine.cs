@@ -1,17 +1,21 @@
 
 using EngineCore;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using Unity.Profiling;
 using UnityEngine;
 public class ChessEngine : MonoBehaviour
 {
-    private Search search;
+    private PerftTester perftTester;
     private Board board;
     private MoveGenerator moveGenerator;
     public bool isWhiteMove = true;
     [SerializeField] private string fenStartingPosition;
     [SerializeField] private int depthToSearchTo;
+    static readonly ProfilerMarker s_MyMarker = new ProfilerMarker("Search");
+
     public Move[] GetCurrentLegalMoves()
     {
         return moveGenerator.getCurrentLegalMoves();
@@ -24,15 +28,15 @@ public class ChessEngine : MonoBehaviour
     {
         return board.GetBitboard(piece);
     }
-    public void makeMove(Move move,bool flipMoves = true)
+    public void makeMove(ref Move move,bool flipMoves = true)
     {
-        board.makeMove(move);
+        board.makeMove(ref move);
         if (flipMoves) isWhiteMove = !isWhiteMove;
         moveGenerator.generateMoves(isWhiteMove);
     }
-    public void unMakeMove(Move move,bool flipMoves = true)
+    public void unMakeMove(ref Move move,bool flipMoves = true)
     {
-        board.unMakeMove(move);
+        board.unMakeMove(ref move);
         if (flipMoves) isWhiteMove = !isWhiteMove;
         moveGenerator.generateMoves(isWhiteMove);
     }
@@ -40,17 +44,36 @@ public class ChessEngine : MonoBehaviour
     {
         board = new Board();
         moveGenerator = new MoveGenerator(board);
-        search = new Search(board, moveGenerator);
-        search.outputDepth = depthToSearchTo;
+        perftTester = new PerftTester(board, moveGenerator);
+        perftTester.outputDepth = depthToSearchTo;
         isWhiteMove = board.convertFenStringToBitBoard(fenStartingPosition);
         moveGenerator.generateMoves(isWhiteMove);
+
+
+    }
+    private void Start()
+    {
+        //StartCoroutine(perftAfterTime());   
+        PerftTest();
+    }
+    //private IEnumerator perftAfterTime()
+    //{
+    //    yield return new WaitForSeconds(0.5f);
+    //    PerftTest();
+    //}
+    private void PerftTest()
+    {
         if (depthToSearchTo == 0) return;
         int depth = depthToSearchTo;
         System.Diagnostics.Stopwatch stopwatch = new System.Diagnostics.Stopwatch();
         stopwatch.Start();
-        int numMoves = search.SearchMoves(depth, isWhiteMove);
+        int numMoves;
+        using (s_MyMarker.Auto())
+        {
+            numMoves = perftTester.SearchMoves(depth, isWhiteMove);
+        }
         stopwatch.Stop();
-        Dictionary<string, int> movesAfterMove = search.getMovesAfterMove();
+        Dictionary<string, int> movesAfterMove = perftTester.getMovesAfterMove();
         int dictNumMoves = 0;
         int fishNumMoves = 0;
         string content = "";
@@ -88,20 +111,18 @@ public class ChessEngine : MonoBehaviour
         {
             if (dataDict[kvp.Key] != kvp.Value)
             {
-                Debug.Log("ERROR, MOVES DIDN'T MATCH. EXPECTED: "+ kvp.Key +" "+ dataDict[kvp.Key]+", BUT GOT: " + kvp.Key +" "+ kvp.Value);
+                Debug.Log("ERROR, MOVES DIDN'T MATCH. EXPECTED: " + kvp.Key + " " + dataDict[kvp.Key] + ", BUT GOT: " + kvp.Key + " " + kvp.Value);
             }
         }
         foreach (KeyValuePair<string, int> kvp in dataDict)
         {
             if (!movesAfterMove.ContainsKey(kvp.Key))
             {
-                Debug.Log("ERROR, MOVE NOT FOUND: "+kvp.Key);
+                Debug.Log("ERROR, MOVE NOT FOUND: " + kvp.Key);
             }
         }
         Debug.Log(isWhiteMove);
         Debug.Log($"Time taken: {stopwatch.ElapsedMilliseconds} ms ({stopwatch.ElapsedTicks} ticks)");
-
-
 
     }
 

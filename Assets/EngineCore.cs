@@ -90,18 +90,18 @@ namespace EngineCore
         }
     }
      
-    public class Move
+    public readonly struct Move
     {
-        public int s1;
-        public int s2;
-        public int promotionPiece = Piece.none;
-        public int capturePiece = Piece.none;
-        public int movePiece;
-        public bool isCastling;
-        public bool isWhite;
-        public bool isRemovingCastlingPrivilege;
-        public bool isDoublePawnPush;
-        public bool isEnPassent;
+        public readonly int s1;
+        public readonly int s2;
+        public readonly int promotionPiece;
+        public readonly int capturePiece;
+        public readonly int movePiece;
+        public readonly bool isCastling;
+        public readonly bool isWhite;
+        public readonly bool isRemovingCastlingPrivilege;
+        public readonly bool isDoublePawnPush;
+        public readonly bool isEnPassent;
         public Move(int currentMovePiece, int square1, int square2, bool isWhitePiece, int capturePiece,uint castlePiecesMoved, int promotionPiece = Piece.none, bool castleMove = false, bool isDoublePawnPush = false,bool isEnPassent = false)
         {
             s1 = square1;
@@ -113,11 +113,11 @@ namespace EngineCore
             this.capturePiece = capturePiece;
             this.isDoublePawnPush = isDoublePawnPush;
             this.isEnPassent = isEnPassent;
-            this.isRemovingCastlingPrivilege = utils.isRemovingCastlingPrivleges(square1,square2,currentMovePiece,capturePiece,castlePiecesMoved);
+            this.isRemovingCastlingPrivilege = Utils.isRemovingCastlingPrivleges(square1,square2,currentMovePiece,capturePiece,castlePiecesMoved);
 
         }
     }
-    public static class utils
+    public static class Utils
     {
         public static string[] pieceToString = { "K", "Q", "B", "N", "R", "P", "k", "q", "b", "n", "r", "p", "" };
         private static string[] letters = { "a", "b", "c", "d", "e", "f", "g", "h" };
