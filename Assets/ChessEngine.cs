@@ -16,7 +16,7 @@ public class ChessEngine : MonoBehaviour
     [SerializeField] private int depthToSearchTo;
     static readonly ProfilerMarker s_MyMarker = new ProfilerMarker("Search");
 
-    public Move[] GetCurrentLegalMoves()
+    public uint[] GetCurrentLegalMoves()
     {
         return moveGenerator.getCurrentLegalMoves();
     }
@@ -28,15 +28,15 @@ public class ChessEngine : MonoBehaviour
     {
         return board.GetBitboard(piece);
     }
-    public void makeMove(ref Move move,bool flipMoves = true)
+    public void makeMove(uint move,bool flipMoves = true)
     {
-        board.makeMove(ref move);
+        board.makeMove(move);
         if (flipMoves) isWhiteMove = !isWhiteMove;
         moveGenerator.generateMoves(isWhiteMove);
     }
-    public void unMakeMove(ref Move move,bool flipMoves = true)
+    public void unMakeMove(uint move,bool flipMoves = true)
     {
-        board.unMakeMove(ref move);
+        board.unMakeMove(move);
         if (flipMoves) isWhiteMove = !isWhiteMove;
         moveGenerator.generateMoves(isWhiteMove);
     }

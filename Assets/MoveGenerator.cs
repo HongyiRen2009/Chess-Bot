@@ -137,7 +137,7 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
     private (ulong, int)[] pinnedSquaresAndPinningPiece = new (ulong, int)[8];
     private int pinningPiecesCount;
     private ulong checkMask;
-    private Move[] moveList = new Move[218];
+    private uint[] moveList = new uint[218];
     private int moveIndex = 0;
     private ulong knightsChecking = 0;
     private ulong pawnsChecking = 0;
@@ -337,7 +337,7 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
     }
 
 
-    public Move[] generateMoves(bool isWhite)
+    public uint[] generateMoves(bool isWhite)
     {
         pawnsChecking = 0;
         knightsChecking = 0;
@@ -384,14 +384,14 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
 
         }
 
-        Move[] returnMoves = new Move[moveIndex];
+        uint[] returnMoves = new uint[moveIndex];
         Array.Copy(moveList, returnMoves, moveIndex);
         return returnMoves;
 
     }
-    public Move[] getCurrentLegalMoves()
+    public uint[] getCurrentLegalMoves()
     {
-        Move[] returnMoves = new Move[moveIndex];
+        uint[] returnMoves = new uint[moveIndex];
         Array.Copy(moveList, returnMoves, moveIndex);
         return returnMoves;
     }
@@ -466,9 +466,9 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
 
     private int getPinIndex(int pieceSquare)
     {
-        for(int i = 0; i < pinningPiecesCount; i++)
+        for (int i = 0; i < pinningPiecesCount; i++)
         {
-            if (((1ul << pieceSquare) & pinnedSquaresAndPinningPiece[i].Item1)!=0)
+            if (((1ul << pieceSquare) & pinnedSquaresAndPinningPiece[i].Item1) != 0)
             {
                 return i;
             }
@@ -479,7 +479,7 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
     {
         int pinIndex = getPinIndex(pieceSquare);
         if (pinIndex == -1) return ~0ul;
-        return pinnedSquaresAndPinningPiece[pinIndex].Item1 | (1ul<<pinnedSquaresAndPinningPiece[pinIndex].Item2); // A pinned piece can move along the pin or capture the piece
+        return pinnedSquaresAndPinningPiece[pinIndex].Item1 | (1ul << pinnedSquaresAndPinningPiece[pinIndex].Item2); // A pinned piece can move along the pin or capture the piece
     }
     private ulong generatePawnMoves(bool isWhite, bool addMove)
     {
@@ -569,17 +569,24 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
                     }
                     if (isPromotion)
                     {
-                        moveList[moveIndex++] = new Move((isWhite ? Piece.whitePawn : Piece.blackPawn), sourceSquare, targetSquare, isWhite, capturePiece,board.GetCastlePiecesMovedMask(), isWhite ? Piece.whiteQueen : Piece.blackQueen, false, isEnpassent);
-                        moveList[moveIndex++] = new Move((isWhite ? Piece.whitePawn : Piece.blackPawn), sourceSquare, targetSquare, isWhite, capturePiece, board.GetCastlePiecesMovedMask(), isWhite ? Piece.whiteKnight : Piece.blackKnight, false, isEnpassent);
-                        moveList[moveIndex++] = new Move((isWhite ? Piece.whitePawn : Piece.blackPawn), sourceSquare, targetSquare, isWhite, capturePiece, board.GetCastlePiecesMovedMask(), isWhite ? Piece.whiteBishop : Piece.blackBishop, false, isEnpassent);
-                        moveList[moveIndex++] = new Move((isWhite ? Piece.whitePawn : Piece.blackPawn), sourceSquare, targetSquare, isWhite, capturePiece, board.GetCastlePiecesMovedMask(), isWhite ? Piece.whiteRook : Piece.blackRook, false, isEnpassent);
+                        moveList[moveIndex++] = Move.CreateMove(sourceSquare, targetSquare, (isWhite ? Piece.whitePawn : Piece.blackPawn), capturePiece, board.GetCastlePiecesMovedMask(), isWhite ? Piece.whiteQueen : Piece.blackQueen, false, isEnpassent);
+                        moveList[moveIndex++] = Move.CreateMove(sourceSquare, targetSquare, (isWhite ? Piece.whitePawn : Piece.blackPawn), capturePiece, board.GetCastlePiecesMovedMask(), isWhite ? Piece.whiteKnight : Piece.blackKnight, false, isEnpassent);
+                        moveList[moveIndex++] = Move.CreateMove(sourceSquare, targetSquare, (isWhite ? Piece.whitePawn : Piece.blackPawn), capturePiece, board.GetCastlePiecesMovedMask(), isWhite ? Piece.whiteBishop : Piece.blackBishop, false, isEnpassent);
+                        moveList[moveIndex++] = Move.CreateMove(sourceSquare, targetSquare, (isWhite ? Piece.whitePawn : Piece.blackPawn), capturePiece, board.GetCastlePiecesMovedMask(), isWhite ? Piece.whiteRook : Piece.blackRook, false, isEnpassent);
 
                     }
                     else
                     {
 
 
-                        moveList[moveIndex++] = new Move((isWhite ? Piece.whitePawn : Piece.blackPawn), sourceSquare, targetSquare, isWhite, capturePiece, board.GetCastlePiecesMovedMask(), 12, false, i == 3, isEnpassent);
+                        moveList[moveIndex++] = Move.CreateMove(sourceSquare, targetSquare,
+                            (isWhite ? Piece.whitePawn : Piece.blackPawn),
+                            capturePiece,
+                            board.GetCastlePiecesMovedMask(),
+                            Piece.none,
+                            false,
+                            isEnpassent,
+                            i == 3);
                     }
                 }
             }
@@ -608,7 +615,10 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
             while (currentKnightTargetSquareBitboard != 0)
             {
                 int targetSquare = BitScanner.BitScanForward(currentKnightTargetSquareBitboard);
-                moveList[moveIndex++] = new Move((isWhite ? Piece.whiteKnight : Piece.blackKnight), startSquare, targetSquare, isWhite, board.getCapturePiece(isWhite, targetSquare), board.GetCastlePiecesMovedMask());
+                moveList[moveIndex++] = Move.CreateMove(startSquare, targetSquare,
+                    (isWhite ? Piece.whiteKnight : Piece.blackKnight),
+                    board.getCapturePiece(isWhite, targetSquare),
+                    board.GetCastlePiecesMovedMask());
                 currentKnightTargetSquareBitboard &= ~(1ul << targetSquare);
             }
 
@@ -635,7 +645,11 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
             while (currentRookMoveSquaresBitboard != 0)
             {
                 int targetSquare = BitScanner.BitScanForward(currentRookMoveSquaresBitboard);
-                moveList[moveIndex++] = new Move((isWhite ? Piece.whiteRook : Piece.blackRook), startSquare, targetSquare, isWhite, board.getCapturePiece(isWhite, targetSquare), board.GetCastlePiecesMovedMask());
+
+                moveList[moveIndex++] = Move.CreateMove(startSquare, targetSquare,
+                    (isWhite ? Piece.whiteRook : Piece.blackRook),
+                    board.getCapturePiece(isWhite, targetSquare),
+                    board.GetCastlePiecesMovedMask());
                 currentRookMoveSquaresBitboard &= ~(1ul << targetSquare);
             }
 
@@ -662,7 +676,10 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
             while (currentBishopMoveSquaresBitboard != 0)
             {
                 int targetSquare = BitScanner.BitScanForward(currentBishopMoveSquaresBitboard);
-                moveList[moveIndex++] = new Move((isWhite ? Piece.whiteBishop : Piece.blackBishop), startSquare, targetSquare, isWhite, board.getCapturePiece(isWhite, targetSquare), board.GetCastlePiecesMovedMask());
+                moveList[moveIndex++] = Move.CreateMove(startSquare, targetSquare,
+                    (isWhite ? Piece.whiteBishop : Piece.blackBishop),
+                    board.getCapturePiece(isWhite, targetSquare),
+                    board.GetCastlePiecesMovedMask());
                 currentBishopMoveSquaresBitboard &= ~(1ul << targetSquare);
             }
 
@@ -689,7 +706,10 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
             while (currentQueenMoveSquaresBitboard != 0)
             {
                 int targetSquare = BitScanner.BitScanForward(currentQueenMoveSquaresBitboard);
-                moveList[moveIndex++] = new Move((isWhite ? Piece.whiteQueen : Piece.blackQueen), startSquare, targetSquare, isWhite, board.getCapturePiece(isWhite, targetSquare), board.GetCastlePiecesMovedMask());
+                moveList[moveIndex++] = Move.CreateMove(startSquare, targetSquare,
+                    (isWhite ? Piece.whiteQueen : Piece.blackQueen),
+                    board.getCapturePiece(isWhite, targetSquare),
+                    board.GetCastlePiecesMovedMask());
                 currentQueenMoveSquaresBitboard &= ~(1ul << targetSquare);
             }
 
@@ -710,7 +730,11 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
             while (currentKingMoveSquaresBitboard != 0)
             {
                 int targetSquare = BitScanner.BitScanForward(currentKingMoveSquaresBitboard);
-                moveList[moveIndex++] = new Move((isWhite ? Piece.whiteKing : Piece.blackKing), startSquare, targetSquare, isWhite, board.getCapturePiece(isWhite, targetSquare), board.GetCastlePiecesMovedMask());
+                moveList[moveIndex++] = Move.CreateMove(startSquare, targetSquare,
+                    (isWhite ? Piece.whiteKing : Piece.blackKing),
+                    board.getCapturePiece(isWhite, targetSquare),
+                    board.GetCastlePiecesMovedMask());
+
                 currentKingMoveSquaresBitboard &= ~(1ul << targetSquare);
             }
             if (isWhite)
@@ -719,13 +743,22 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
                 {
                     if (((blackAttackingSquares & 0x0c00000000000000ul) == 0 && (board.GetAllPiecesBitboard() & 0x0e00000000000000ul) == 0 && board.hasCastlePieceNotMoved(CastlePiece.whiteLeftRook)))
                     {
-                        int targetSquare = 58;
-                        moveList[moveIndex++] = new Move(Piece.whiteKing, startSquare, targetSquare, isWhite, board.getCapturePiece(isWhite, targetSquare),board.GetCastlePiecesMovedMask(), Piece.none, true);
+                        moveList[moveIndex++] = Move.CreateMove(startSquare, 58,
+                            Piece.whiteKing,
+                            Piece.none,
+                            board.GetCastlePiecesMovedMask(),
+                            Piece.none,
+                            true);
+
                     }
                     if ((((blackAttackingSquares | board.GetAllPiecesBitboard()) & 0x6000000000000000ul) == 0 && board.hasCastlePieceNotMoved(CastlePiece.whiteRightRook)))
                     {
-                        int targetSquare = 62;
-                        moveList[moveIndex++] = new Move(Piece.whiteKing, startSquare, targetSquare, isWhite, board.getCapturePiece(isWhite, targetSquare),board.GetCastlePiecesMovedMask(), Piece.none, true);
+                        moveList[moveIndex++] = Move.CreateMove(startSquare, 62,
+                            Piece.whiteKing,
+                            Piece.none,
+                            board.GetCastlePiecesMovedMask(),
+                            Piece.none,
+                            true);
                     }
                 }
             }
@@ -735,13 +768,21 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
                 {
                     if ((((whiteAttackingSquares) & 0b0001100ul) == 0 && (board.GetAllPiecesBitboard() & 0b0001110ul) == 0 && board.hasCastlePieceNotMoved(CastlePiece.blackLeftRook)))
                     {
-                        int targetSquare = 2;
-                        moveList[moveIndex++] = new Move(Piece.blackKing, startSquare, targetSquare, isWhite, board.getCapturePiece(isWhite, targetSquare),board.GetCastlePiecesMovedMask(), Piece.none, true);
+                        moveList[moveIndex++] = Move.CreateMove(startSquare, 2,
+                            Piece.blackKing,
+                            Piece.none,
+                            board.GetCastlePiecesMovedMask(),
+                            Piece.none,
+                            true);
                     }
                     if ((((whiteAttackingSquares | board.GetAllPiecesBitboard()) & 0b1100000ul) == 0 && board.hasCastlePieceNotMoved(CastlePiece.blackRightRook)))
                     {
-                        int targetSquare = 6;
-                        moveList[moveIndex++] = new Move(Piece.blackKing, startSquare, targetSquare, isWhite, board.getCapturePiece(isWhite, targetSquare),board.GetCastlePiecesMovedMask(), Piece.none, true);
+                        moveList[moveIndex++] = Move.CreateMove(startSquare, 6,
+                            Piece.blackKing,
+                            Piece.none,
+                            board.GetCastlePiecesMovedMask(),
+                            Piece.none,
+                            true);
                     }
                 }
             }

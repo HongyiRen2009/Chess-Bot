@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using UnityEngine;
 
 namespace EngineCore
@@ -89,34 +90,54 @@ namespace EngineCore
             return MagicTable[b * Magic >> 58];
         }
     }
-     
-    public readonly struct Move
+    public static class Move
     {
-        public readonly int s1;
-        public readonly int s2;
-        public readonly int promotionPiece;
-        public readonly int capturePiece;
-        public readonly int movePiece;
-        public readonly bool isCastling;
-        public readonly bool isWhite;
-        public readonly bool isRemovingCastlingPrivilege;
-        public readonly bool isDoublePawnPush;
-        public readonly bool isEnPassent;
-        public Move(int currentMovePiece, int square1, int square2, bool isWhitePiece, int capturePiece,uint castlePiecesMoved, int promotionPiece = Piece.none, bool castleMove = false, bool isDoublePawnPush = false,bool isEnPassent = false)
+        public static uint CreateMove(
+        int from,
+        int to,
+        int movingPiece,
+        int capturedPiece,
+        uint CastlePiecesMoved,
+        int promotionPiece = Piece.none,
+        bool castle = false,
+        bool enPassant = false,
+        bool doublePush = false)
         {
-            s1 = square1;
-            s2 = square2;
-            this.promotionPiece = promotionPiece;
-            movePiece = currentMovePiece;
-            isCastling = castleMove;
-            isWhite = isWhitePiece;
-            this.capturePiece = capturePiece;
-            this.isDoublePawnPush = isDoublePawnPush;
-            this.isEnPassent = isEnPassent;
-            this.isRemovingCastlingPrivilege = Utils.isRemovingCastlingPrivleges(square1,square2,currentMovePiece,capturePiece,castlePiecesMoved);
+            uint data =
+                (uint)from |
+                ((uint)to << 6) |
+                ((uint)movingPiece << 12) |
+                ((uint)capturedPiece << 16) |
+                ((uint)promotionPiece << 20);
 
+            if (castle) data |= 1u << 24;
+            if (enPassant) data |= 1u << 25;
+            if (doublePush) data |= 1u << 26;
+            if (Utils.isRemovingCastlingPrivleges(from,to,movingPiece, capturedPiece, CastlePiecesMoved)) data |= 1u << 27;
+            return data;
         }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int GetSourceSquare(uint move) { return (int)(move & 0x3F); }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int GetTargetSquare(uint move) { return (int)((move >> 6) & 0x3F); }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int GetPiece(uint move) { return (int)((move >> 12) & 0xF); }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int GetCapturedPiece(uint move) { return (int)((move >> 16) & 0xF); }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int GetPromotionPiece(uint move) { return (int)((move >> 20) & 0xF); }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool IsCastling(uint move) { return (move & (1u << 24)) != 0; }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool IsEnPassent(uint move) { return (move & (1u << 25)) != 0; }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool IsDoublePush(uint move) { return (move & (1u << 26)) != 0; }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool IsWhite(uint move) { return GetPiece(move) < 6; }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool IsRemovingCastlePrivileges(uint move) { return (move & (1u << 27)) != 0; }
     }
+    
     public static class Utils
     {
         public static string[] pieceToString = { "K", "Q", "B", "N", "R", "P", "k", "q", "b", "n", "r", "p", "" };

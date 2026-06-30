@@ -241,9 +241,18 @@ public class Board
         return capturePiece;
     }
 
-    public void makeMove(ref Move move)
+    public void makeMove(uint move)
     {
-        switch (move.movePiece)
+        int sourceSquare = Move.GetSourceSquare(move);
+        int targetSquare = Move.GetTargetSquare(move);
+        int movePiece = Move.GetPiece(move);
+        int capturePiece = Move.GetCapturedPiece(move);
+        int promotionPiece = Move.GetPromotionPiece(move);
+        bool isWhite = Move.IsWhite(move);
+        bool isEnPassent = Move.IsEnPassent(move);
+        bool isCastling = Move.IsCastling(move);
+        bool isDoublePawnPush = Move.IsDoublePush(move);
+        switch (movePiece)
         {
             case Piece.whiteKing:
                 if ((CastlePiecesMoved & CastlePiece.whiteKing) == 0)
@@ -260,7 +269,7 @@ public class Board
                 }
                 break;
             case Piece.whiteRook:
-                if (move.s1 == 56)
+                if (sourceSquare == 56)
                 {
                     if ((CastlePiecesMoved & CastlePiece.whiteLeftRook) == 0)
                     {
@@ -269,7 +278,7 @@ public class Board
                     }
                     break;
                 }
-                else if (move.s1 == 63)
+                else if (sourceSquare == 63)
                 {
                     if ((CastlePiecesMoved & CastlePiece.whiteRightRook) == 0)
                     {
@@ -280,7 +289,7 @@ public class Board
                 }
                 break;
             case Piece.blackRook:
-                if (move.s1 == 0)
+                if (sourceSquare == 0)
                 {
                     if ((CastlePiecesMoved & CastlePiece.blackLeftRook) == 0)
                     {
@@ -289,7 +298,7 @@ public class Board
                     }
                     break;
                 }
-                else if (move.s1 == 7)
+                else if (sourceSquare == 7)
                 {
                     if ((CastlePiecesMoved & CastlePiece.blackRightRook) == 0)
                     {
@@ -302,12 +311,12 @@ public class Board
 
         }
 
-        if (move.isCastling)
+        if (Move.IsCastling(move))
         {
-            if (move.isWhite)
+            if (Move.IsWhite(move))
             {
-                bitBoards[Piece.whiteKing] = 1ul << move.s2;
-                if (move.s2 == 58)
+                bitBoards[Piece.whiteKing] = 1ul << targetSquare;
+                if (targetSquare == 58)
                 {
                     bitBoards[Piece.whiteRook] &= ~0x0100000000000000ul;
                     bitBoards[Piece.whiteRook] |= 0x0800000000000000ul;
@@ -320,8 +329,8 @@ public class Board
             }
             else
             {
-                bitBoards[Piece.blackKing] = 1ul << move.s2;
-                if (move.s2 == 2)
+                bitBoards[Piece.blackKing] = 1ul << targetSquare;
+                if (targetSquare == 2)
                 {
                     bitBoards[Piece.blackRook] &= ~1ul;
                     bitBoards[Piece.blackRook] |= 8ul;
@@ -336,18 +345,18 @@ public class Board
         else
         {
 
-            bitBoards[move.movePiece] &= ~(1ul << move.s1);
-            bitBoards[move.movePiece] |= (1ul << move.s2);
-            if (move.capturePiece != Piece.none)
+            bitBoards[movePiece] &= ~(1ul << sourceSquare);
+            bitBoards[movePiece] |= (1ul << targetSquare);
+            if (capturePiece != Piece.none)
             {
                 int enPassentOffset = 0;
-                if (move.isEnPassent) enPassentOffset += (move.isWhite ? 8 : -8);
-                bitBoards[move.capturePiece] &= ~(1ul << (move.s2 + enPassentOffset));
+                if (isEnPassent) enPassentOffset += (isWhite ? 8 : -8);
+                bitBoards[capturePiece] &= ~(1ul << (targetSquare + enPassentOffset));
 
-                switch (move.capturePiece)
+                switch (capturePiece)
                 {
                     case Piece.whiteRook:
-                        if (move.s2 == 56)
+                        if (targetSquare == 56)
                         {
                             if ((CastlePiecesMoved & CastlePiece.whiteLeftRook) == 0)
                             {
@@ -356,7 +365,7 @@ public class Board
                             }
                             break;
                         }
-                        else if (move.s2 == 63)
+                        else if (targetSquare == 63)
                         {
                             if ((CastlePiecesMoved & CastlePiece.whiteRightRook) == 0)
                             {
@@ -367,7 +376,7 @@ public class Board
                         }
                         break;
                     case Piece.blackRook:
-                        if (move.s2 == 0)
+                        if (targetSquare == 0)
                         {
                             if ((CastlePiecesMoved & CastlePiece.blackLeftRook) == 0)
                             {
@@ -376,7 +385,7 @@ public class Board
                             }
                             break;
                         }
-                        else if (move.s2 == 7)
+                        else if (targetSquare == 7)
                         {
                             if ((CastlePiecesMoved & CastlePiece.blackRightRook) == 0)
                             {
@@ -388,26 +397,36 @@ public class Board
                         break;
                 }
             }
-            if (move.promotionPiece != Piece.none)
+            if (promotionPiece != Piece.none)
             {
-                bitBoards[move.movePiece] &= ~(1ul << move.s2);
-                bitBoards[move.promotionPiece] |= (1ul << move.s2);
+                bitBoards[movePiece] &= ~(1ul << targetSquare);
+                bitBoards[promotionPiece] |= (1ul << targetSquare);
             }
             prevEnPassentTargetSquare = enPassentTargetSquare;
             enPassentTargetSquare = 64;
-            if (move.isDoublePawnPush)
+            if (isDoublePawnPush)
             {
-                enPassentTargetSquare = move.s2 + (move.isWhite ? 8 : -8);
+                enPassentTargetSquare = targetSquare + (isWhite ? 8 : -8);
             }
         }
 
         generateCombinedBitboards();
     }
-    public void unMakeMove(ref Move move)
+    public void unMakeMove(uint move)
     {
-        if (move.isRemovingCastlingPrivilege)
+        int sourceSquare = Move.GetSourceSquare(move);
+        int targetSquare = Move.GetTargetSquare(move);
+        int movePiece = Move.GetPiece(move);
+        int capturePiece = Move.GetCapturedPiece(move);
+        int promotionPiece = Move.GetPromotionPiece(move);
+        bool isWhite = Move.IsWhite(move);
+        bool isEnPassent = Move.IsEnPassent(move);
+        bool isCastling = Move.IsCastling(move);
+        bool isDoublePawnPush = Move.IsDoublePush(move);
+        bool isRemovingCastlingPrivilege = Move.IsRemovingCastlePrivileges(move);
+        if (isRemovingCastlingPrivilege)
         {
-            switch (move.movePiece)
+            switch (movePiece)
             {
                 case Piece.whiteKing:
                     CastlePiecesMoved &= ~CastlePiece.whiteKing;
@@ -416,24 +435,24 @@ public class Board
                     CastlePiecesMoved &= ~CastlePiece.blackKing;
                     break;
                 case Piece.whiteRook:
-                    if (move.s1 == 56)
+                    if (sourceSquare == 56)
                     {
                         CastlePiecesMoved &= ~CastlePiece.whiteLeftRook;
 
                     }
-                    else if (move.s1 == 63)
+                    else if (sourceSquare == 63)
                     {
                         CastlePiecesMoved &= ~CastlePiece.whiteRightRook;
 
                     }
                     break;
                 case Piece.blackRook:
-                    if (move.s1 == 0)
+                    if (sourceSquare == 0)
                     {
                         CastlePiecesMoved &= ~CastlePiece.blackLeftRook;
 
                     }
-                    else if (move.s1 == 7)
+                    else if (sourceSquare == 7)
                     {
                         CastlePiecesMoved &= ~CastlePiece.blackRightRook;
 
@@ -443,12 +462,12 @@ public class Board
             }
         }
 
-        if (move.isCastling)
+        if (isCastling)
         {
-            if (move.isWhite)
+            if (isWhite)
             {
-                bitBoards[Piece.whiteKing] = 1ul << move.s1;
-                if (move.s2 == 58)
+                bitBoards[Piece.whiteKing] = 1ul << sourceSquare;
+                if (targetSquare == 58)
                 {
                     bitBoards[Piece.whiteRook] |= 0x0100000000000000ul;
                     bitBoards[Piece.whiteRook] &= ~0x0800000000000000ul;
@@ -461,8 +480,8 @@ public class Board
             }
             else
             {
-                bitBoards[Piece.blackKing] = 1ul << move.s1;
-                if (move.s2 == 2)
+                bitBoards[Piece.blackKing] = 1ul << sourceSquare;
+                if (targetSquare == 2)
                 {
                     bitBoards[Piece.blackRook] |= 1ul;
                     bitBoards[Piece.blackRook] &= ~8ul;
@@ -477,36 +496,36 @@ public class Board
         else
         {
 
-            bitBoards[move.movePiece] |= (1ul << move.s1);
-            bitBoards[move.movePiece] &= ~(1ul << move.s2);
-            if (move.capturePiece != Piece.none)
+            bitBoards[movePiece] |= (1ul << sourceSquare);
+            bitBoards[movePiece] &= ~(1ul << targetSquare);
+            if (capturePiece != Piece.none)
             {
                 int enPassentOffset = 0;
-                if (move.isEnPassent) enPassentOffset += (move.isWhite ? 8 : -8);
-                bitBoards[move.capturePiece] |= (1ul << (move.s2 + enPassentOffset));
-                if (move.isRemovingCastlingPrivilege)
+                if (isEnPassent) enPassentOffset += (isWhite ? 8 : -8);
+                bitBoards[capturePiece] |= (1ul << (targetSquare + enPassentOffset));
+                if (isRemovingCastlingPrivilege)
                 {
-                    switch (move.capturePiece)
+                    switch (capturePiece)
                     {
                         case Piece.whiteRook:
-                            if (move.s2 == 56)
+                            if (targetSquare == 56)
                             {
                                 CastlePiecesMoved &= ~CastlePiece.whiteLeftRook;
 
                             }
-                            else if (move.s2 == 63)
+                            else if (targetSquare == 63)
                             {
                                 CastlePiecesMoved &= ~CastlePiece.whiteRightRook;
 
                             }
                             break;
                         case Piece.blackRook:
-                            if (move.s2 == 0)
+                            if (targetSquare == 0)
                             {
                                 CastlePiecesMoved &= ~CastlePiece.blackLeftRook;
 
                             }
-                            else if (move.s2 == 7)
+                            else if (targetSquare == 7)
                             {
                                 CastlePiecesMoved &= ~CastlePiece.blackRightRook;
 
@@ -516,9 +535,9 @@ public class Board
                     }
                 }
             }
-            if (move.promotionPiece != Piece.none)
+            if (promotionPiece != Piece.none)
             {
-                bitBoards[move.promotionPiece] &= ~(1ul << move.s2);
+                bitBoards[promotionPiece] &= ~(1ul << targetSquare);
             }
             enPassentTargetSquare = 64;
             if (prevEnPassentTargetSquare != 64)

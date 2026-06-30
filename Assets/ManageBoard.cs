@@ -22,9 +22,9 @@ public class ManageBoard : MonoBehaviour
     [SerializeField] private ChessEngine chessEngine;
     private Action<int> startMove;
     private Action<int,int> endMove;
-    private Move[] moves;
+    private uint[] moves;
     private ManageChessPiece[] pieces = new ManageChessPiece[64];
-    private Move lastMove;
+    private uint lastMove;
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
@@ -66,11 +66,11 @@ public class ManageBoard : MonoBehaviour
         for(int i = 0; i < moves.Length; i++)
         {
             if (moves[i].Equals(default)) break;
-            if (moves[i].s1 == startSquare)
+            if (Move.GetSourceSquare(moves[i]) == startSquare)
             {
                 GameObject currBoardCircle = Instantiate(boardCircles, boardCirclesTransform);
-                currBoardCircle.GetComponent<RectTransform>().anchoredPosition = new Vector2((moves[i].s2 % 8) * 133, Mathf.Floor(moves[i].s2 / 8) * -133);
-                currBoardCircle.GetComponent<Image>().sprite = moves[i].capturePiece == Piece.none || moves[i].isEnPassent ? circle : hollowCircle;
+                currBoardCircle.GetComponent<RectTransform>().anchoredPosition = new Vector2((Move.GetTargetSquare(moves[i]) % 8) * 133, Mathf.Floor(Move.GetTargetSquare(moves[i]) / 8) * -133);
+                currBoardCircle.GetComponent<Image>().sprite = Move.GetCapturedPiece(moves[i]) == Piece.none || Move.IsEnPassent(moves[i]) ? circle : hollowCircle;
             }
         }
         boardCirclesTransform.SetAsLastSibling();
@@ -82,37 +82,44 @@ public class ManageBoard : MonoBehaviour
         Debug.Log(moves.Length);
         string content = "";
         string filePath = Path.Combine(Application.dataPath, "moves.txt");
-        foreach (Move move in moves)
+        foreach (uint move in moves)
         {
-            content += move.s1 + " " + move.s2 + Utils.pieceToString[move.promotionPiece] +"\n";
+            content += Move.GetSourceSquare(move) + " " + Move.GetTargetSquare(move) + Utils.pieceToString[Move.GetPromotionPiece(move)] +"\n";
         }
         File.WriteAllText(filePath, content);
     }
     public void unMakeLastMove()
     {
         if (lastMove.Equals(null)) return;
-
-        pieces[lastMove.s1] = pieces[lastMove.s2];
-        pieces[lastMove.s2] = null;
-        pieces[lastMove.s1].setPosition(lastMove.s1);
-        if (lastMove.capturePiece != Piece.none)
+        int sourceSquare = Move.GetSourceSquare(lastMove);
+        int targetSquare = Move.GetTargetSquare(lastMove);
+        int movePiece = Move.GetPiece(lastMove);
+        int capturePiece = Move.GetCapturedPiece(lastMove);
+        int promotionPiece = Move.GetPromotionPiece(lastMove);
+        bool isWhite = Move.IsWhite(lastMove);
+        bool isEnPassent = Move.IsEnPassent(lastMove);
+        bool isCastling = Move.IsCastling(lastMove);
+        pieces[sourceSquare] = pieces[targetSquare];
+        pieces[targetSquare] = null;
+        pieces[sourceSquare].setPosition(sourceSquare);
+        if (capturePiece != Piece.none)
         {
-            GameObject currPiece = Instantiate(chessPiece, lastMove.capturePiece < 6 ? whiteBoardPiecesTransform : blackBoardPiecesTransform);
+            GameObject currPiece = Instantiate(chessPiece, capturePiece < 6 ? whiteBoardPiecesTransform : blackBoardPiecesTransform);
             int EnPassentOffset = 0;
-            if (lastMove.isEnPassent) EnPassentOffset = +(lastMove.isWhite ? 8 : -8);
-            int pieceSquare = lastMove.s2 + EnPassentOffset;
+            if (isEnPassent) EnPassentOffset = +(isWhite ? 8 : -8);
+            int pieceSquare = targetSquare + EnPassentOffset;
             pieces[pieceSquare] = currPiece.GetComponent<ManageChessPiece>();
-            pieces[pieceSquare].Initialize(pieceSquare, lastMove.capturePiece, startMove, endMove);
+            pieces[pieceSquare].Initialize(pieceSquare, capturePiece, startMove, endMove);
         }
-        if (lastMove.promotionPiece != Piece.none)
+        if (promotionPiece != Piece.none)
         {
-            pieces[lastMove.s1].SetPiece(lastMove.movePiece);
+            pieces[sourceSquare].SetPiece(movePiece);
         }
-        if (lastMove.isCastling)
+        if (isCastling)
         {
-            if (lastMove.isWhite)
+            if (isWhite)
             {
-                if (lastMove.s2 == 58)
+                if (targetSquare == 58)
                 {
                     pieces[59].setPosition(56);
                 }
@@ -123,7 +130,7 @@ public class ManageBoard : MonoBehaviour
             }
             else
             {
-                if (lastMove.s2 == 2)
+                if (targetSquare == 2)
                 {
                     pieces[3].setPosition(0);
                 }
@@ -133,7 +140,7 @@ public class ManageBoard : MonoBehaviour
                 }
             }
         }
-        chessEngine.unMakeMove(ref lastMove);
+        chessEngine.unMakeMove(lastMove);
         moves = chessEngine.GetCurrentLegalMoves();
         lastMove = default;
     }
@@ -143,7 +150,7 @@ public class ManageBoard : MonoBehaviour
         for (int i = 0; i < moves.Length; i++)
         {
             if (moves[i].Equals(default)) break;
-            if (moves[i].s1 != startSquare || moves[i].s2 != endSquare) continue;
+            if (Move.GetSourceSquare(moves[i]) != startSquare || Move.GetTargetSquare(moves[i]) != endSquare) continue;
             lastMove = moves[i];
             if (pieces[endSquare] != null)
             {
@@ -151,13 +158,13 @@ public class ManageBoard : MonoBehaviour
             }
             pieces[endSquare] = pieces[startSquare];
             pieces[startSquare] = null;
-            if (moves[i].promotionPiece != Piece.none)
+            if (Move.GetPromotionPiece(moves[i]) != Piece.none)
             {
-                pieces[endSquare].SetPiece(moves[i].promotionPiece);
+                pieces[endSquare].SetPiece(Move.GetPromotionPiece(moves[i]));
             }
-            if (moves[i].isCastling)
+            if (Move.IsCastling(moves[i]))
             {
-                if (moves[i].isWhite)
+                if (Move.IsWhite(moves[i]))
                 {
                     if (endSquare == 58)
                     {
@@ -180,12 +187,12 @@ public class ManageBoard : MonoBehaviour
                     }
                 }
             }
-            if (moves[i].isEnPassent)
+            if (Move.IsEnPassent(moves[i]))
             {
-                Destroy(pieces[endSquare+(moves[i].isWhite ? 8:-8)].gameObject);
+                Destroy(pieces[endSquare + (Move.IsWhite(moves[i]) ? 8:-8)].gameObject);
             }
             pieces[endSquare].setPosition(endSquare);
-            chessEngine.makeMove(ref moves[i]);
+            chessEngine.makeMove(moves[i]);
             moves = chessEngine.GetCurrentLegalMoves();
             //string content = "";
             //foreach(Move move in moves)
