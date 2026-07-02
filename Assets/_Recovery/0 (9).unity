@@ -454,9 +454,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   isWhiteMove: 1
-  fenStartingPosition: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1  '
-  depthToSearchTo: 3
-  doPerftTest: 0
+  fenStartingPosition: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
+  depthToSearchTo: 4
 --- !u!4 &488775020
 Transform:
   m_ObjectHideFlags: 0

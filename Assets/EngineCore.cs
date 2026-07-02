@@ -3,6 +3,13 @@ using UnityEngine;
 
 namespace EngineCore
 {
+    public enum GameState
+    {
+        Ongoing,
+        WhiteWins,
+        BlackWins,
+        Stalemate
+    }
     public class RayDirections
     {
         public const int left = 0;
@@ -142,6 +149,11 @@ namespace EngineCore
     {
         public static string[] pieceToString = { "K", "Q", "B", "N", "R", "P", "k", "q", "b", "n", "r", "p", "" };
         private static string[] letters = { "a", "b", "c", "d", "e", "f", "g", "h" };
+        private static int[] pieceValues = new int[12] { 0, 900, 300, 300, 500, 100, 0, 900, 300, 300, 500, 100, };
+        public static int GetPieceValue(int piece)
+        {
+            return pieceValues[piece];
+        }
         public static string convertBoardIndexToChessNotation(int index)
         {
             return letters[index % 8] + (8 - Mathf.Floor(index / 8)).ToString();
@@ -244,6 +256,13 @@ namespace EngineCore
                     break;
             }
             return false;
+        }
+        public static int GetRank(int square)
+        {
+            return square / 8;
+        }
+        public static int GetFile(int square) {
+            return square % 8;
         }
     }
 }

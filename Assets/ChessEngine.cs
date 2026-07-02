@@ -11,11 +11,17 @@ public class ChessEngine : MonoBehaviour
     private PerftTester perftTester;
     private Board board;
     private MoveGenerator moveGenerator;
+    private Evaluation evaluation;
+    private Search search;
     public bool isWhiteMove = true;
     [SerializeField] private string fenStartingPosition;
     [SerializeField] private int depthToSearchTo;
+    [SerializeField] private bool doPerftTest = false;
     static readonly ProfilerMarker s_MyMarker = new ProfilerMarker("Search");
-
+    public uint getBestMove(bool isWhite)
+    {
+        return search.GetBestMove(depthToSearchTo*2, isWhite);
+    }
     public uint[] GetCurrentLegalMoves()
     {
         return moveGenerator.getCurrentLegalMoves();
@@ -45,6 +51,8 @@ public class ChessEngine : MonoBehaviour
         board = new Board();
         moveGenerator = new MoveGenerator(board);
         perftTester = new PerftTester(board, moveGenerator);
+        evaluation = new Evaluation();
+        search = new Search(board, moveGenerator, evaluation);
         perftTester.outputDepth = depthToSearchTo;
         isWhiteMove = board.convertFenStringToBitBoard(fenStartingPosition);
         moveGenerator.generateMoves(isWhiteMove);
@@ -53,7 +61,8 @@ public class ChessEngine : MonoBehaviour
     }
     private void Start()
     {
-        //StartCoroutine(perftAfterTime());   
+        //StartCoroutine(perftAfterTime());
+        if(doPerftTest)
         PerftTest();
     }
     //private IEnumerator perftAfterTime()
@@ -124,6 +133,20 @@ public class ChessEngine : MonoBehaviour
         Debug.Log(isWhiteMove);
         Debug.Log($"Time taken: {stopwatch.ElapsedMilliseconds} ms ({stopwatch.ElapsedTicks} ticks)");
 
+    }
+    public GameState getGameState(bool isWhite)
+    {
+        uint[] currentLegalMoves = moveGenerator.generateMoves(isWhite);
+        int currentMoveIndex = moveGenerator.getMoveIndex();
+        if (currentMoveIndex == 0)
+        {
+            if (moveGenerator.isInCheck(isWhite))
+            {
+                return isWhite ? GameState.BlackWins : GameState.WhiteWins;
+            }
+            return GameState.Stalemate;
+        }
+        return GameState.Ongoing;
     }
 
 }

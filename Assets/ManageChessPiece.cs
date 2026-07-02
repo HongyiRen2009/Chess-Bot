@@ -1,5 +1,6 @@
 using EngineCore;
 using System;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -11,12 +12,13 @@ public class ManageChessPiece : MonoBehaviour, IBeginDragHandler,IDragHandler, I
     private int piece;
     private Vector2 startDragAnchoredPosition;
     private RectTransform rectTransform;
-    private Action<int> startMove;
-    private Action<int,int> endMove;
     private int boardIndex;
+    private ManageBoard manageBoard;
+    private Canvas canvas;
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
+        canvas = GameObject.FindAnyObjectByType<Canvas>();
     }
 
     // Update is called once per frame
@@ -24,15 +26,14 @@ public class ManageChessPiece : MonoBehaviour, IBeginDragHandler,IDragHandler, I
     {
         
     }
-    public void Initialize(int boardIndex, int piece, Action<int> startMove, Action<int,int> endMove)
+    public void Initialize(int boardIndex, int piece, ManageBoard manageBoard)
     {
         image = GetComponent<Image>();
         rectTransform = GetComponent<RectTransform>();
         this.boardIndex = boardIndex;
         setPosition(boardIndex);
         SetPiece(piece);
-        this.startMove = startMove;
-        this.endMove = endMove;
+        this.manageBoard = manageBoard;
     }
     public void setPosition(int boardIndex)
     {
@@ -52,21 +53,28 @@ public class ManageChessPiece : MonoBehaviour, IBeginDragHandler,IDragHandler, I
 
     void IBeginDragHandler.OnBeginDrag(PointerEventData eventData)
     {
+        if (manageBoard.isGameOver)
+        { 
+            eventData.pointerDrag = null;
+            return; 
+        }
         startDragAnchoredPosition = rectTransform.anchoredPosition;
-        startMove?.Invoke(boardIndex);
+        manageBoard.AddCircles(boardIndex);
         transform.SetAsLastSibling();
     }
 
     void IEndDragHandler.OnEndDrag(PointerEventData eventData)
     {
-        endMove?.Invoke(boardIndex,calculateBoardIndex());
+        manageBoard.FinishedDraggingChessPiece(boardIndex, calculateBoardIndex());
     }
     private void OnDestroy()
     {
     }
 
-    public void OnDrag(PointerEventData eventData)
+    void IDragHandler.OnDrag(PointerEventData eventData)
     {
-        transform.position = eventData.position-new Vector2(rectTransform.rect.width/4,-rectTransform.rect.height/4);
+float scaleFactor = canvas.scaleFactor;
+
+        rectTransform.position = eventData.position+new Vector2(-rectTransform.rect.width, rectTransform.rect.height)/2*scaleFactor;
     }
 }

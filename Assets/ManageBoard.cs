@@ -2,6 +2,7 @@ using EngineCore;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -20,16 +21,14 @@ public class ManageBoard : MonoBehaviour
     [SerializeField] private Sprite hollowCircle;
 
     [SerializeField] private ChessEngine chessEngine;
-    private Action<int> startMove;
-    private Action<int,int> endMove;
+    [SerializeField] private TextMeshProUGUI result;
     private uint[] moves;
     private ManageChessPiece[] pieces = new ManageChessPiece[64];
     private uint lastMove;
+    public bool isGameOver;
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
-        startMove += AddCircles;
-        endMove += FinishedDraggingChessPiece;
         // Create the board
         for(int i = 0; i < 64; i++)
         {
@@ -45,7 +44,7 @@ public class ManageBoard : MonoBehaviour
                 int pieceSquare = BitScanner.BitScanForward(bitBoard);
                 GameObject currPiece = Instantiate(chessPiece, piece<6 ? whiteBoardPiecesTransform:blackBoardPiecesTransform);
                 pieces[pieceSquare] = currPiece.GetComponent<ManageChessPiece>();
-                pieces[pieceSquare].Initialize(pieceSquare, piece,startMove,endMove);
+                pieces[pieceSquare].Initialize(pieceSquare, piece,this);
 
                 bitBoard &= ~(1ul << pieceSquare);
             }
@@ -88,6 +87,79 @@ public class ManageBoard : MonoBehaviour
         }
         File.WriteAllText(filePath, content);
     }
+    public void makeMove(uint move)
+    {
+        int startSquare = Move.GetSourceSquare(move);
+        int endSquare = Move.GetTargetSquare(move);
+
+        lastMove = move;
+        if (pieces[endSquare] != null)
+        {
+            Destroy(pieces[endSquare].gameObject);
+        }
+        pieces[endSquare] = pieces[startSquare];
+        pieces[startSquare] = null;
+        if (Move.GetPromotionPiece(move) != Piece.none)
+        {
+            pieces[endSquare].SetPiece(Move.GetPromotionPiece(move));
+        }
+        if (Move.IsCastling(move))
+        {
+            if (Move.IsWhite(move))
+            {
+                if (endSquare == 58)
+                {
+                    pieces[59] = pieces[56];
+                    pieces[59].setPosition(59);
+                    pieces[56] = null;
+                }
+                else
+                {
+                    pieces[61] = pieces[63];
+                    pieces[61].setPosition(61);
+                    pieces[63] = null;
+                }
+            }
+            else
+            {
+                if (endSquare == 2)
+                {
+                    pieces[3] = pieces[0];
+                    pieces[3].setPosition(3);
+                    pieces[0] = null;
+                }
+                else
+                {
+                    pieces[5] = pieces[7];
+                    pieces[5].setPosition(5);
+                    pieces[7] = null;
+                }
+            }
+        }
+        if (Move.IsEnPassent(move))
+        {
+            Destroy(pieces[endSquare + (Move.IsWhite(move) ? 8 : -8)].gameObject);
+        }
+        pieces[endSquare].setPosition(endSquare);
+        chessEngine.makeMove(move);
+        GameState gameState = chessEngine.getGameState(chessEngine.isWhiteMove);
+        if (gameState != GameState.Ongoing)
+        {
+            switch(gameState) {
+                case GameState.WhiteWins:
+                    result.text = "Checkmate: White Wins";
+                    break;
+                case GameState.BlackWins:
+                    result.text = "Checkmate: Black Wins";
+                    break;
+                case GameState.Stalemate:
+                    result.text = "Stalemate: draw";
+                    break;
+
+            }
+            isGameOver = true;
+        }
+    }
     public void unMakeLastMove()
     {
         if (lastMove.Equals(null)) return;
@@ -109,7 +181,7 @@ public class ManageBoard : MonoBehaviour
             if (isEnPassent) EnPassentOffset = +(isWhite ? 8 : -8);
             int pieceSquare = targetSquare + EnPassentOffset;
             pieces[pieceSquare] = currPiece.GetComponent<ManageChessPiece>();
-            pieces[pieceSquare].Initialize(pieceSquare, capturePiece, startMove, endMove);
+            pieces[pieceSquare].Initialize(pieceSquare, capturePiece, this);
         }
         if (promotionPiece != Piece.none)
         {
@@ -151,49 +223,11 @@ public class ManageBoard : MonoBehaviour
         {
             if (moves[i].Equals(default)) break;
             if (Move.GetSourceSquare(moves[i]) != startSquare || Move.GetTargetSquare(moves[i]) != endSquare) continue;
-            lastMove = moves[i];
-            if (pieces[endSquare] != null)
+            makeMove(moves[i]);
+            if (!isGameOver)
             {
-                Destroy(pieces[endSquare].gameObject);
+                engineMakeMove();
             }
-            pieces[endSquare] = pieces[startSquare];
-            pieces[startSquare] = null;
-            if (Move.GetPromotionPiece(moves[i]) != Piece.none)
-            {
-                pieces[endSquare].SetPiece(Move.GetPromotionPiece(moves[i]));
-            }
-            if (Move.IsCastling(moves[i]))
-            {
-                if (Move.IsWhite(moves[i]))
-                {
-                    if (endSquare == 58)
-                    {
-                        pieces[56].setPosition(59);
-                    }
-                    else
-                    {
-                        pieces[63].setPosition(61);
-                    }
-                }
-                else
-                {
-                    if (endSquare == 2)
-                    {
-                        pieces[0].setPosition(3);
-                    }
-                    else
-                    {
-                        pieces[7].setPosition(5);
-                    }
-                }
-            }
-            if (Move.IsEnPassent(moves[i]))
-            {
-                Destroy(pieces[endSquare + (Move.IsWhite(moves[i]) ? 8:-8)].gameObject);
-            }
-            pieces[endSquare].setPosition(endSquare);
-            chessEngine.makeMove(moves[i]);
-            moves = chessEngine.GetCurrentLegalMoves();
             //string content = "";
             //foreach(Move move in moves)
             //{
@@ -207,6 +241,15 @@ public class ManageBoard : MonoBehaviour
             
         }
         pieces[startSquare].setPosition(startSquare);
+    }
+    private void engineMakeMove()
+    {
+        uint bestMove = chessEngine.getBestMove(chessEngine.isWhiteMove);
+        makeMove(bestMove);
+        if (!isGameOver)
+        {
+            moves = chessEngine.GetCurrentLegalMoves();
+        }
     }
 
     // Update is called once per frame

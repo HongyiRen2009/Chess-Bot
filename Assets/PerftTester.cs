@@ -21,7 +21,7 @@ public class PerftTester
     public int SearchMoves(int currentDepth, bool isWhite)
     {
 
-        uint[] currentPsuedoLegalMoves = moveGenerator.generateMoves(isWhite);
+        uint[] currentLegalMoves = moveGenerator.generateMoves(isWhite);
         int currentMoveIndex = moveGenerator.getMoveIndex();
         int numberOfMoves = 0;
         for (int i = 0; i < currentMoveIndex; i++)
@@ -34,11 +34,11 @@ public class PerftTester
             //{
             //    Debug.Log($"ERROR, expected {test} but got {board.GetAllPiecesBitboard()} instead, isCapture:{currentPsuedoLegalMoves[i].capturePiece!=piece.none}, isCastling:{currentPsuedoLegalMoves[i].isCastling}, piece:{currentPsuedoLegalMoves[i].movePiece}, promotionPiece:{currentPsuedoLegalMoves[i].promotionPiece} depth:{currentDepth}");
             //}
-            if (Move.IsCastling( currentPsuedoLegalMoves[i]) && currentDepth == outputDepth)
+            if (Move.IsCastling(currentLegalMoves[i]) && currentDepth == outputDepth)
             {
                 Debug.Log("HI");
             }
-            board.makeMove(currentPsuedoLegalMoves[i]);
+            board.makeMove(currentLegalMoves[i]);
 
             int currentNumberOfMoves = currentDepth == 1
                 ? 1
@@ -46,12 +46,12 @@ public class PerftTester
 
             if (currentDepth == outputDepth)
             {
-                string key = Utils.convertBoardIndexToChessNotation(Move.GetSourceSquare(currentPsuedoLegalMoves[i])) + Utils.convertBoardIndexToChessNotation(Move.GetTargetSquare(currentPsuedoLegalMoves[i])) + Utils.pieceToString[Move.GetPromotionPiece(currentPsuedoLegalMoves[i])];
+                string key = Utils.convertBoardIndexToChessNotation(Move.GetSourceSquare(currentLegalMoves[i])) + Utils.convertBoardIndexToChessNotation(Move.GetTargetSquare(currentLegalMoves[i])) + Utils.pieceToString[Move.GetPromotionPiece(currentLegalMoves[i])];
                 movesAfterMove[key] = currentNumberOfMoves;
             }
 
             numberOfMoves += currentNumberOfMoves;
-            board.unMakeMove(currentPsuedoLegalMoves[i]);
+            board.unMakeMove(currentLegalMoves[i]);
         }
         return numberOfMoves;
     }

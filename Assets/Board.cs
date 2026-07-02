@@ -1,4 +1,5 @@
 using EngineCore;
+using System;
 using System.ComponentModel;
 using UnityEngine;
 
@@ -10,7 +11,29 @@ public class Board
     private uint CastlePiecesMoved = 0;
     private int enPassentTargetSquare = 64;
     private int prevEnPassentTargetSquare = 64;
-    public Board() { }
+    private ulong[,] zobristTable = new ulong[64, 12];
+    private ulong zobristHash;
+    public ulong GetRandomULong()
+    {
+        System.Random random = new System.Random();
+        byte[] buffer = new byte[8];
+
+        random.NextBytes(buffer);
+        return BitConverter.ToUInt64(buffer, 0);
+    }
+    public Board() {
+        for (int i = 0; i < 64; i++)
+        {
+            for (int piece = 0; piece < 12; piece++)
+            {
+                zobristTable[i, piece] = GetRandomULong();
+            }
+        }
+    }
+    public int GetKingSquare(bool isWhite)
+    {
+        return BitScanner.BitScanForward(GetBitboard(Piece.uncoloredKing, isWhite));
+    }
     public bool hasCastlePieceNotMoved(uint piece)
     {
         return (CastlePiecesMoved & piece) == 0;
@@ -26,6 +49,10 @@ public class Board
     public ulong GetBitboard(int piece)
     {
         return bitBoards[piece];
+    }
+    public ulong[] GetBitboards()
+    {
+        return bitBoards;
     }
     public ulong GetCombinedBitboard(bool isWhite)
     {
@@ -43,6 +70,10 @@ public class Board
     {
         return enPassentTargetSquare;
     }
+    public ulong getZobristHash()
+    {
+        return zobristHash;
+    }
     private void generateCombinedBitboards()
     {
         whitePiecesBitboard = 0ul;
@@ -59,6 +90,20 @@ public class Board
         blackPiecesBitboard |= bitBoards[Piece.blackRook];
         blackPiecesBitboard |= bitBoards[Piece.blackQueen];
         blackPiecesBitboard |= bitBoards[Piece.blackPawn];
+    }
+    private void generateZobristHash()
+    {
+       zobristHash = 0;
+        for (int piece = 0; piece < 12; piece++)
+        {
+            ulong bitboard = GetBitboard(piece);
+            while (bitboard != 0)
+            {
+                int pieceSquare = BitScanner.BitScanForward(bitboard);
+                zobristHash ^= zobristTable[pieceSquare, piece];
+                bitboard &= ~(1ul << pieceSquare);
+            }
+        }
     }
     private int addFenCharToBitBoard(int index, char fenChar)
     {
@@ -187,6 +232,7 @@ public class Board
 
         }
         generateCombinedBitboards();
+        generateZobristHash();
         return isWhiteMove;
     }
     public int getCapturePiece(bool isWhite, int s2)
@@ -248,7 +294,7 @@ public class Board
         int movePiece = Move.GetPiece(move);
         int capturePiece = Move.GetCapturedPiece(move);
         int promotionPiece = Move.GetPromotionPiece(move);
-        bool isWhite = Move.IsWhite(move);
+        bool isWhite = movePiece<6;
         bool isEnPassent = Move.IsEnPassent(move);
         bool isCastling = Move.IsCastling(move);
         bool isDoublePawnPush = Move.IsDoublePush(move);
@@ -311,9 +357,9 @@ public class Board
 
         }
 
-        if (Move.IsCastling(move))
+        if (isCastling)
         {
-            if (Move.IsWhite(move))
+            if (isWhite)
             {
                 bitBoards[Piece.whiteKing] = 1ul << targetSquare;
                 if (targetSquare == 58)
@@ -411,6 +457,7 @@ public class Board
         }
 
         generateCombinedBitboards();
+        generateZobristHash();
     }
     public void unMakeMove(uint move)
     {
@@ -547,5 +594,6 @@ public class Board
             }
         }
         generateCombinedBitboards();
+        generateZobristHash();
     }
 }

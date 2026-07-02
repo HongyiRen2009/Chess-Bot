@@ -134,8 +134,8 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
     //Mutable global state
     public ulong whiteAttackingSquares;
     public ulong blackAttackingSquares;
-    private (ulong, int)[] pinnedSquaresAndPinningPiece = new (ulong, int)[8];
-    private int pinningPiecesCount;
+    private ulong[] pinMasks = new ulong[64];
+    private ulong pinnedSquaresMask;
     private ulong checkMask;
     private uint[] moveList = new uint[218];
     private int moveIndex = 0;
@@ -343,6 +343,7 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
         knightsChecking = 0;
         moveIndex = 0;
         checkMask = 0;
+        pinnedSquaresMask = 0ul;
         whiteAttackingSquares = 0;
         blackAttackingSquares = 0;
         if (isWhite)
@@ -408,7 +409,7 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
         ulong[] pinnedPiecesCandidates = { kingOrthogonalRays & rookQueens, kingDiagonalRays & bishopsQueens };
         return pinnedPiecesCandidates;
     }
-    private bool isInCheck(bool isWhite)
+    public bool isInCheck(bool isWhite)
     {
         ulong attackerBitboard = isWhite ? blackAttackingSquares : whiteAttackingSquares;
         ulong kingBitboard = board.GetBitboard(Piece.uncoloredKing, isWhite);
@@ -416,21 +417,22 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
     }
     private void generatePinMask(bool isWhite)
     {
-        pinningPiecesCount = 0;
         int kingSquare = BitScanner.BitScanForward(board.GetBitboard(Piece.uncoloredKing, isWhite));
-        ulong[] pinnedPiecesCandidates = GetKingXRaySliderCanidadates(isWhite, kingSquare);
+        ulong[] pinningPiecesCandidates = GetKingXRaySliderCanidadates(isWhite, kingSquare);
         for (int i = 0; i < 2; i++)
         {
-            while (pinnedPiecesCandidates[i] != 0)
+            while (pinningPiecesCandidates[i] != 0)
             {
-                int pinningPieceSquare = BitScanner.BitScanForward(pinnedPiecesCandidates[i]);
+                int pinningPieceSquare = BitScanner.BitScanForward(pinningPiecesCandidates[i]);
                 ulong squaresBetweenPieceAndKing = squaresBetween[pinningPieceSquare, kingSquare];
-                if (math.countbits(squaresBetweenPieceAndKing & board.GetAllBlockersBitboard(isWhite)) == 1) // If the number of blockers is 1, then that piece is pinned
+                ulong pinnedPiecesMask = squaresBetweenPieceAndKing & board.GetAllBlockersBitboard(isWhite);
+                if (math.countbits(pinnedPiecesMask) == 1) // If the number of blockers is 1, then that piece is pinned
                 {
-                    pinnedSquaresAndPinningPiece[pinningPiecesCount] = (squaresBetweenPieceAndKing, pinningPieceSquare);
-                    pinningPiecesCount++;
+                    int pinnedSquare = BitScanner.BitScanForward(pinnedPiecesMask);
+                    pinnedSquaresMask |= (1ul << pinnedSquare);
+                    pinMasks[pinnedSquare] = squaresBetweenPieceAndKing|(1ul<<pinningPieceSquare);
                 }
-                pinnedPiecesCandidates[i] &= ~(1ul << pinningPieceSquare);
+                pinningPiecesCandidates[i] &= ~(1ul << pinningPieceSquare);
             }
         }
     }
@@ -464,22 +466,11 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
     }
 
 
-    private int getPinIndex(int pieceSquare)
+
+    private ulong getPinMask(int pieceSquare)
     {
-        for (int i = 0; i < pinningPiecesCount; i++)
-        {
-            if (((1ul << pieceSquare) & pinnedSquaresAndPinningPiece[i].Item1) != 0)
-            {
-                return i;
-            }
-        }
-        return -1;
-    }
-    private ulong getPinMask(int pieceSquare, bool isWhite)
-    {
-        int pinIndex = getPinIndex(pieceSquare);
-        if (pinIndex == -1) return ~0ul;
-        return pinnedSquaresAndPinningPiece[pinIndex].Item1 | (1ul << pinnedSquaresAndPinningPiece[pinIndex].Item2); // A pinned piece can move along the pin or capture the piece
+        if ((pinnedSquaresMask & (1ul << pieceSquare)) == 0) return ~0ul;
+        return pinMasks[pieceSquare];
     }
     private ulong generatePawnMoves(bool isWhite, bool addMove)
     {
@@ -557,7 +548,7 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
                     int sourceSquare = targetSquare - (isWhite ? whiteTargetSquareOffsets[i] : blackTargetSquareOffsets[i]);
 
                     bool isPromotion = isWhite ? targetSquare <= 7 : targetSquare >= 56;
-                    ulong pinMask = getPinMask(sourceSquare, isWhite);
+                    ulong pinMask = getPinMask(sourceSquare);
                     currentPawnMoveBitboard &= ~(1ul << targetSquare);
                     if ((pinMask & (1ul << targetSquare)) == 0) continue;
                     if ((checkMask & (1ul << targetSquare)) == 0) continue;
@@ -610,7 +601,7 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
                 knightsChecking |= (1ul << startSquare);
             }
             if (!addMove) continue;
-            currentKnightTargetSquareBitboard &= getPinMask(startSquare, isWhite);
+            currentKnightTargetSquareBitboard &= getPinMask(startSquare);
             currentKnightTargetSquareBitboard &= checkMask;
             while (currentKnightTargetSquareBitboard != 0)
             {
@@ -639,7 +630,7 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
             currentRookBitboard &= ~(1ul << startSquare);
 
             if (!addMove) continue;
-            currentRookMoveSquaresBitboard &= getPinMask(startSquare, isWhite);
+            currentRookMoveSquaresBitboard &= getPinMask(startSquare);
             currentRookMoveSquaresBitboard &= checkMask;
 
             while (currentRookMoveSquaresBitboard != 0)
@@ -671,7 +662,7 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
             currentBishopBitboard &= ~(1ul << startSquare);
 
             if (!addMove) continue;
-            currentBishopMoveSquaresBitboard &= getPinMask(startSquare, isWhite);
+            currentBishopMoveSquaresBitboard &= getPinMask(startSquare);
             currentBishopMoveSquaresBitboard &= checkMask;
             while (currentBishopMoveSquaresBitboard != 0)
             {
@@ -701,7 +692,7 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
             currentQueenMoveSquaresBitboard &= ~(board.GetCombinedBitboard(isWhite));
             currentQueenBitboard &= ~(1ul << startSquare);
             if (!addMove) continue;
-            currentQueenMoveSquaresBitboard &= getPinMask(startSquare, isWhite);
+            currentQueenMoveSquaresBitboard &= getPinMask(startSquare);
             currentQueenMoveSquaresBitboard &= checkMask;
             while (currentQueenMoveSquaresBitboard != 0)
             {
