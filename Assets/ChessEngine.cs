@@ -48,10 +48,10 @@ public class ChessEngine : MonoBehaviour
     }
     void Awake()
     {
-        board = new Board();
+        evaluation = new Evaluation();
+        board = new Board(evaluation);
         moveGenerator = new MoveGenerator(board);
         perftTester = new PerftTester(board, moveGenerator);
-        evaluation = new Evaluation();
         search = new Search(board, moveGenerator, evaluation);
         perftTester.outputDepth = depthToSearchTo;
         isWhiteMove = board.convertFenStringToBitBoard(fenStartingPosition);

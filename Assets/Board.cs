@@ -5,7 +5,8 @@ using UnityEngine;
 
 public class Board
 {
-    private static ulong[] bitBoards = { 0ul, 0ul, 0ul, 0ul, 0ul, 0ul, 0ul, 0ul, 0ul, 0ul, 0ul, 0ul };
+    private ulong[] bitBoards = { 0ul, 0ul, 0ul, 0ul, 0ul, 0ul, 0ul, 0ul, 0ul, 0ul, 0ul, 0ul };
+    private int[] piecesBoard = new int[64];
     private ulong whitePiecesBitboard;
     private ulong blackPiecesBitboard;
     private uint CastlePiecesMoved = 0;
@@ -13,6 +14,7 @@ public class Board
     private int prevEnPassentTargetSquare = 64;
     private ulong[,] zobristTable = new ulong[64, 12];
     private ulong zobristHash;
+    private Evaluation evaluation;
     public ulong GetRandomULong()
     {
         System.Random random = new System.Random();
@@ -21,7 +23,9 @@ public class Board
         random.NextBytes(buffer);
         return BitConverter.ToUInt64(buffer, 0);
     }
-    public Board() {
+    public Board(Evaluation evaluation)
+    {
+        this.evaluation = evaluation;
         for (int i = 0; i < 64; i++)
         {
             for (int piece = 0; piece < 12; piece++)
@@ -74,93 +78,84 @@ public class Board
     {
         return zobristHash;
     }
-    private void generateCombinedBitboards()
+
+    private void AddPiece(int piece, int square)
     {
-        whitePiecesBitboard = 0ul;
-        whitePiecesBitboard |= bitBoards[Piece.whiteKing];
-        whitePiecesBitboard |= bitBoards[Piece.whiteKnight];
-        whitePiecesBitboard |= bitBoards[Piece.whiteBishop];
-        whitePiecesBitboard |= bitBoards[Piece.whiteRook];
-        whitePiecesBitboard |= bitBoards[Piece.whiteQueen];
-        whitePiecesBitboard |= bitBoards[Piece.whitePawn];
-        blackPiecesBitboard = 0ul;
-        blackPiecesBitboard |= bitBoards[Piece.blackKing];
-        blackPiecesBitboard |= bitBoards[Piece.blackKnight];
-        blackPiecesBitboard |= bitBoards[Piece.blackBishop];
-        blackPiecesBitboard |= bitBoards[Piece.blackRook];
-        blackPiecesBitboard |= bitBoards[Piece.blackQueen];
-        blackPiecesBitboard |= bitBoards[Piece.blackPawn];
+        bitBoards[piece] |= 1ul << square;
+        if (piece < 6) whitePiecesBitboard |= 1ul << square; else blackPiecesBitboard |= 1ul << square;
+        zobristHash ^= zobristTable[square, piece];
+        piecesBoard[square] = piece;
+        evaluation.UpdateEvaluation(this, piece, true, square);
     }
-    private void generateZobristHash()
+    private void RemovePiece(int piece, int square)
     {
-       zobristHash = 0;
-        for (int piece = 0; piece < 12; piece++)
+        bitBoards[piece] &= ~(1ul << square);
+        if (piece < 6) whitePiecesBitboard &= ~(1ul << square); else blackPiecesBitboard &= ~(1ul << square);
+        zobristHash ^= zobristTable[square, piece];
+        if (piece != piecesBoard[square])
         {
-            ulong bitboard = GetBitboard(piece);
-            while (bitboard != 0)
-            {
-                int pieceSquare = BitScanner.BitScanForward(bitboard);
-                zobristHash ^= zobristTable[pieceSquare, piece];
-                bitboard &= ~(1ul << pieceSquare);
-            }
+            Debug.LogError("NOT MATCHING");
         }
+        piecesBoard[square] = Piece.none;
+        evaluation.UpdateEvaluation(this, piece, false, square);
     }
     private int addFenCharToBitBoard(int index, char fenChar)
     {
         switch (fenChar)
         {
             case 'r':
-                bitBoards[Piece.blackRook] |= (1ul << index);
+                AddPiece(Piece.blackRook, index);
                 break;
             case 'n':
-                bitBoards[Piece.blackKnight] |= (1ul << index);
+                AddPiece(Piece.blackKnight, index);
 
                 break;
 
             case 'b':
-                bitBoards[Piece.blackBishop] |= (1ul << index);
+                AddPiece(Piece.blackBishop, index);
+
 
                 break;
 
             case 'q':
-                bitBoards[Piece.blackQueen] |= (1ul << index);
+                AddPiece(Piece.blackQueen, index);
 
                 break;
 
             case 'p':
-                bitBoards[Piece.blackPawn] |= (1ul << index);
+                AddPiece(Piece.blackPawn, index);
 
                 break;
             case 'k':
-                bitBoards[Piece.blackKing] |= (1ul << index);
+                AddPiece(Piece.blackKing, index);
 
                 break;
             case 'R':
-                bitBoards[Piece.whiteRook] |= (1ul << index);
+                AddPiece(Piece.whiteRook, index);
 
                 break;
 
             case 'N':
-                bitBoards[Piece.whiteKnight] |= (1ul << index);
+                AddPiece(Piece.whiteKnight, index);
 
                 break;
 
             case 'B':
-                bitBoards[Piece.whiteBishop] |= (1ul << index);
+                AddPiece(Piece.whiteBishop, index);
 
                 break;
 
             case 'Q':
-                bitBoards[Piece.whiteQueen] |= (1ul << index);
+                AddPiece(Piece.whiteQueen, index);
 
                 break;
 
             case 'P':
-                bitBoards[Piece.whitePawn] |= (1ul << index);
+                AddPiece(Piece.whitePawn, index);
 
                 break;
             case 'K':
-                bitBoards[Piece.whiteKing] |= (1ul << index);
+                AddPiece(Piece.whiteKing, index);
 
                 break;
             default:
@@ -197,6 +192,10 @@ public class Board
         int index = 0;
         int informationTypeIndex = 0;
         bool isWhiteMove = true;
+        whitePiecesBitboard = 0ul;
+        blackPiecesBitboard = 0ul;
+        Array.Fill(piecesBoard, Piece.none);
+        evaluation.ResetEvaluation();
         for (int i = 0; i < fenString.Length; i++)
         {
             if (fenString[i] == ' ')
@@ -231,60 +230,11 @@ public class Board
             }
 
         }
-        generateCombinedBitboards();
-        generateZobristHash();
         return isWhiteMove;
     }
-    public int getCapturePiece(bool isWhite, int s2)
+    public int getCapturePiece(int s2)
     {
-        int capturePiece = Piece.none;
-        if (isWhite)
-        {
-            if ((bitBoards[Piece.blackKnight] & (1ul << s2)) != 0)
-            {
-                capturePiece = Piece.blackKnight;
-            }
-            else if ((bitBoards[Piece.blackBishop] & (1ul << s2)) != 0)
-            {
-                capturePiece = Piece.blackBishop;
-            }
-            else if ((bitBoards[Piece.blackPawn] & (1ul << s2)) != 0)
-            {
-                capturePiece = Piece.blackPawn;
-            }
-            else if ((bitBoards[Piece.blackQueen] & (1ul << s2)) != 0)
-            {
-                capturePiece = Piece.blackQueen;
-            }
-            else if ((bitBoards[Piece.blackRook] & (1ul << s2)) != 0)
-            {
-                capturePiece = Piece.blackRook;
-            }
-        }
-        else
-        {
-            if ((bitBoards[Piece.whiteKnight] & (1ul << s2)) != 0)
-            {
-                capturePiece = Piece.whiteKnight;
-            }
-            else if ((bitBoards[Piece.whiteBishop] & (1ul << s2)) != 0)
-            {
-                capturePiece = Piece.whiteBishop;
-            }
-            else if ((bitBoards[Piece.whiteRook] & (1ul << s2)) != 0)
-            {
-                capturePiece = Piece.whiteRook;
-            }
-            else if ((bitBoards[Piece.whiteQueen] & (1ul << s2)) != 0)
-            {
-                capturePiece = Piece.whiteQueen;
-            }
-            else if ((bitBoards[Piece.whitePawn] & (1ul << s2)) != 0)
-            {
-                capturePiece = Piece.whitePawn;
-            }
-        }
-        return capturePiece;
+        return piecesBoard[s2];
     }
 
     public void makeMove(uint move)
@@ -294,24 +244,23 @@ public class Board
         int movePiece = Move.GetPiece(move);
         int capturePiece = Move.GetCapturedPiece(move);
         int promotionPiece = Move.GetPromotionPiece(move);
-        bool isWhite = movePiece<6;
+        bool isWhite = movePiece < 6;
         bool isEnPassent = Move.IsEnPassent(move);
         bool isCastling = Move.IsCastling(move);
         bool isDoublePawnPush = Move.IsDoublePush(move);
+
         switch (movePiece)
         {
             case Piece.whiteKing:
                 if ((CastlePiecesMoved & CastlePiece.whiteKing) == 0)
                 {
                     CastlePiecesMoved |= CastlePiece.whiteKing;
-
                 }
                 break;
             case Piece.blackKing:
                 if ((CastlePiecesMoved & CastlePiece.blackKing) == 0)
                 {
                     CastlePiecesMoved |= CastlePiece.blackKing;
-
                 }
                 break;
             case Piece.whiteRook:
@@ -320,7 +269,6 @@ public class Board
                     if ((CastlePiecesMoved & CastlePiece.whiteLeftRook) == 0)
                     {
                         CastlePiecesMoved |= CastlePiece.whiteLeftRook;
-    
                     }
                     break;
                 }
@@ -329,7 +277,6 @@ public class Board
                     if ((CastlePiecesMoved & CastlePiece.whiteRightRook) == 0)
                     {
                         CastlePiecesMoved |= CastlePiece.whiteRightRook;
-    
                     }
                     break;
                 }
@@ -340,7 +287,6 @@ public class Board
                     if ((CastlePiecesMoved & CastlePiece.blackLeftRook) == 0)
                     {
                         CastlePiecesMoved |= CastlePiece.blackLeftRook;
-    
                     }
                     break;
                 }
@@ -349,55 +295,56 @@ public class Board
                     if ((CastlePiecesMoved & CastlePiece.blackRightRook) == 0)
                     {
                         CastlePiecesMoved |= CastlePiece.blackRightRook;
-    
                     }
                     break;
                 }
                 break;
-
         }
 
         if (isCastling)
         {
             if (isWhite)
             {
-                bitBoards[Piece.whiteKing] = 1ul << targetSquare;
+                RemovePiece(Piece.whiteKing, sourceSquare);
+                AddPiece(Piece.whiteKing, targetSquare);
+
                 if (targetSquare == 58)
                 {
-                    bitBoards[Piece.whiteRook] &= ~0x0100000000000000ul;
-                    bitBoards[Piece.whiteRook] |= 0x0800000000000000ul;
+                    RemovePiece(Piece.whiteRook, 56);
+                    AddPiece(Piece.whiteRook, 59);
                 }
                 else
                 {
-                    bitBoards[Piece.whiteRook] |= 0x2000000000000000ul;
-                    bitBoards[Piece.whiteRook] &= ~0x8000000000000000ul;
+                    RemovePiece(Piece.whiteRook, 63);
+                    AddPiece(Piece.whiteRook, 61);
                 }
             }
             else
             {
-                bitBoards[Piece.blackKing] = 1ul << targetSquare;
+                RemovePiece(Piece.blackKing, sourceSquare);
+                AddPiece(Piece.blackKing, targetSquare);
+
                 if (targetSquare == 2)
                 {
-                    bitBoards[Piece.blackRook] &= ~1ul;
-                    bitBoards[Piece.blackRook] |= 8ul;
+                    RemovePiece(Piece.blackRook, 0);
+                    AddPiece(Piece.blackRook, 3);
                 }
                 else
                 {
-                    bitBoards[Piece.blackRook] |= 32ul;
-                    bitBoards[Piece.blackRook] &= ~128ul;
+                    RemovePiece(Piece.blackRook, 7);
+                    AddPiece(Piece.blackRook, 5);
                 }
             }
         }
         else
         {
+            RemovePiece(movePiece, sourceSquare);
 
-            bitBoards[movePiece] &= ~(1ul << sourceSquare);
-            bitBoards[movePiece] |= (1ul << targetSquare);
             if (capturePiece != Piece.none)
             {
                 int enPassentOffset = 0;
                 if (isEnPassent) enPassentOffset += (isWhite ? 8 : -8);
-                bitBoards[capturePiece] &= ~(1ul << (targetSquare + enPassentOffset));
+                RemovePiece(capturePiece, targetSquare + enPassentOffset);
 
                 switch (capturePiece)
                 {
@@ -405,19 +352,13 @@ public class Board
                         if (targetSquare == 56)
                         {
                             if ((CastlePiecesMoved & CastlePiece.whiteLeftRook) == 0)
-                            {
                                 CastlePiecesMoved |= CastlePiece.whiteLeftRook;
-            
-                            }
                             break;
                         }
                         else if (targetSquare == 63)
                         {
                             if ((CastlePiecesMoved & CastlePiece.whiteRightRook) == 0)
-                            {
                                 CastlePiecesMoved |= CastlePiece.whiteRightRook;
-            
-                            }
                             break;
                         }
                         break;
@@ -425,29 +366,22 @@ public class Board
                         if (targetSquare == 0)
                         {
                             if ((CastlePiecesMoved & CastlePiece.blackLeftRook) == 0)
-                            {
                                 CastlePiecesMoved |= CastlePiece.blackLeftRook;
-            
-                            }
                             break;
                         }
                         else if (targetSquare == 7)
                         {
                             if ((CastlePiecesMoved & CastlePiece.blackRightRook) == 0)
-                            {
                                 CastlePiecesMoved |= CastlePiece.blackRightRook;
-            
-                            }
                             break;
                         }
                         break;
                 }
             }
-            if (promotionPiece != Piece.none)
-            {
-                bitBoards[movePiece] &= ~(1ul << targetSquare);
-                bitBoards[promotionPiece] |= (1ul << targetSquare);
-            }
+
+            int pieceToPlace = promotionPiece != Piece.none ? promotionPiece : movePiece;
+            AddPiece(pieceToPlace, targetSquare);
+
             prevEnPassentTargetSquare = enPassentTargetSquare;
             enPassentTargetSquare = 64;
             if (isDoublePawnPush)
@@ -455,10 +389,8 @@ public class Board
                 enPassentTargetSquare = targetSquare + (isWhite ? 8 : -8);
             }
         }
-
-        generateCombinedBitboards();
-        generateZobristHash();
     }
+
     public void unMakeMove(uint move)
     {
         int sourceSquare = Move.GetSourceSquare(move);
@@ -471,6 +403,7 @@ public class Board
         bool isCastling = Move.IsCastling(move);
         bool isDoublePawnPush = Move.IsDoublePush(move);
         bool isRemovingCastlingPrivilege = Move.IsRemovingCastlePrivileges(move);
+
         if (isRemovingCastlingPrivilege)
         {
             switch (movePiece)
@@ -485,27 +418,22 @@ public class Board
                     if (sourceSquare == 56)
                     {
                         CastlePiecesMoved &= ~CastlePiece.whiteLeftRook;
-
                     }
                     else if (sourceSquare == 63)
                     {
                         CastlePiecesMoved &= ~CastlePiece.whiteRightRook;
-
                     }
                     break;
                 case Piece.blackRook:
                     if (sourceSquare == 0)
                     {
                         CastlePiecesMoved &= ~CastlePiece.blackLeftRook;
-
                     }
                     else if (sourceSquare == 7)
                     {
                         CastlePiecesMoved &= ~CastlePiece.blackRightRook;
-
                     }
                     break;
-
             }
         }
 
@@ -513,79 +441,65 @@ public class Board
         {
             if (isWhite)
             {
-                bitBoards[Piece.whiteKing] = 1ul << sourceSquare;
+                RemovePiece(Piece.whiteKing, targetSquare);
+                AddPiece(Piece.whiteKing, sourceSquare);
+
                 if (targetSquare == 58)
                 {
-                    bitBoards[Piece.whiteRook] |= 0x0100000000000000ul;
-                    bitBoards[Piece.whiteRook] &= ~0x0800000000000000ul;
+                    RemovePiece(Piece.whiteRook, 59);
+                    AddPiece(Piece.whiteRook, 56);
                 }
                 else
                 {
-                    bitBoards[Piece.whiteRook] &= ~0x2000000000000000ul;
-                    bitBoards[Piece.whiteRook] |= 0x8000000000000000ul;
+                    RemovePiece(Piece.whiteRook, 61);
+                    AddPiece(Piece.whiteRook, 63);
                 }
             }
             else
             {
-                bitBoards[Piece.blackKing] = 1ul << sourceSquare;
+                RemovePiece(Piece.blackKing, targetSquare);
+                AddPiece(Piece.blackKing, sourceSquare);
+
                 if (targetSquare == 2)
                 {
-                    bitBoards[Piece.blackRook] |= 1ul;
-                    bitBoards[Piece.blackRook] &= ~8ul;
+                    RemovePiece(Piece.blackRook, 3);
+                    AddPiece(Piece.blackRook, 0);
                 }
                 else
                 {
-                    bitBoards[Piece.blackRook] &= ~32ul;
-                    bitBoards[Piece.blackRook] |= 128ul;
+                    RemovePiece(Piece.blackRook, 5);
+                    AddPiece(Piece.blackRook, 7);
                 }
             }
         }
         else
         {
+            int pieceToRemove = promotionPiece != Piece.none ? promotionPiece : movePiece;
+            RemovePiece(pieceToRemove, targetSquare);
+            AddPiece(movePiece, sourceSquare);
 
-            bitBoards[movePiece] |= (1ul << sourceSquare);
-            bitBoards[movePiece] &= ~(1ul << targetSquare);
             if (capturePiece != Piece.none)
             {
                 int enPassentOffset = 0;
                 if (isEnPassent) enPassentOffset += (isWhite ? 8 : -8);
-                bitBoards[capturePiece] |= (1ul << (targetSquare + enPassentOffset));
+                AddPiece(capturePiece, targetSquare + enPassentOffset);
+
                 if (isRemovingCastlingPrivilege)
                 {
                     switch (capturePiece)
                     {
                         case Piece.whiteRook:
-                            if (targetSquare == 56)
-                            {
-                                CastlePiecesMoved &= ~CastlePiece.whiteLeftRook;
-
-                            }
-                            else if (targetSquare == 63)
-                            {
-                                CastlePiecesMoved &= ~CastlePiece.whiteRightRook;
-
-                            }
+                            if (targetSquare == 56) CastlePiecesMoved &= ~CastlePiece.whiteLeftRook;
+                            else if (targetSquare == 63) CastlePiecesMoved &= ~CastlePiece.whiteRightRook;
                             break;
                         case Piece.blackRook:
-                            if (targetSquare == 0)
-                            {
-                                CastlePiecesMoved &= ~CastlePiece.blackLeftRook;
-
-                            }
-                            else if (targetSquare == 7)
-                            {
-                                CastlePiecesMoved &= ~CastlePiece.blackRightRook;
-
-                            }
+                            if (targetSquare == 0) CastlePiecesMoved &= ~CastlePiece.blackLeftRook;
+                            else if (targetSquare == 7) CastlePiecesMoved &= ~CastlePiece.blackRightRook;
                             break;
-
                     }
                 }
             }
-            if (promotionPiece != Piece.none)
-            {
-                bitBoards[promotionPiece] &= ~(1ul << targetSquare);
-            }
+
             enPassentTargetSquare = 64;
             if (prevEnPassentTargetSquare != 64)
             {
@@ -593,7 +507,5 @@ public class Board
                 prevEnPassentTargetSquare = 64;
             }
         }
-        generateCombinedBitboards();
-        generateZobristHash();
     }
 }

@@ -51,19 +51,6 @@ public class Search
         
     }
 
-    private void orderMoves(uint[] moves,int moveIndex,uint ttMove)
-    {
-        Dictionary<uint, int> scoreCache = new Dictionary<uint, int>();
-        for(int i = 0; i < moveIndex; i++)
-        {
-            scoreCache.Add(moves[i], getMoveOrderScoreGuess(moves[i]));
-        }
-        Array.Sort(moves, 0, moveIndex, Comparer<uint>.Create((x, y) => {
-            if (y == ttMove) return 1;
-            return scoreCache[y].CompareTo(scoreCache[x]);
-
-        }));
-    }
     private int getMoveOrderScoreGuess(uint move)
     {
         int moveScoreGuess = 0;
@@ -80,6 +67,7 @@ public class Search
         }
         return moveScoreGuess;
     }
+
     public uint GetBestMove(int depth, bool isWhite)
     {
         bestMove = 0;
@@ -124,6 +112,38 @@ public class Search
         }
         return probeFailed;
     }
+    private int GetBestGuessedMoveIndex(uint[] moves, int moveCount,int startIndex, uint ttMove)
+    {
+        int bestIndex = 0;
+        int bestGuessScore = int.MinValue;
+
+        for (int i = startIndex; i < moveCount; i++)
+        {
+            int score = getMoveOrderScoreGuess(moves[i]);
+
+            if (moves[i] == ttMove)
+                score += 1000000;
+
+            if (score > bestGuessScore)
+            {
+                bestGuessScore = score;
+                bestIndex = i;
+            }
+        }
+
+        return bestIndex;
+    }
+    private void orderMoves(uint[] moves, int moveCount, uint ttMove)
+    {
+        Array.Sort(moves, 0, moveCount, Comparer<uint>.Create((a, b) =>
+        {
+            if (a == ttMove) return -1;
+            if (b == ttMove) return 1;
+
+            return getMoveOrderScoreGuess(b)
+                 .CompareTo(getMoveOrderScoreGuess(a));
+        }));
+    }
     public int MinMaxSearch(int depth, int alpha, int beta, bool isWhite)
     {
         positionsSearched++;
@@ -144,16 +164,21 @@ public class Search
             return 0; // Stalemate
         }
         if (depth == 0) {
-            int val = evaluation.EvaluatePosition(board, isWhite);
+            int val = evaluation.GetEvaluation(board,isWhite);
             transpositionTable[zobristIndex] = new TTEntry(bestMove, zobristHash, val, depth, TTFlag.EXACT);
             return val;
         }
-        orderMoves(currentLegalMoves, currentMoveIndex,ttMove);
+        orderMoves(currentLegalMoves, currentMoveIndex, ttMove);
         for (int i = 0; i < currentMoveIndex; i++)
         {
-            board.makeMove(currentLegalMoves[i]); 
+            //int bestMoveIndex = GetBestGuessedMoveIndex(currentLegalMoves,currentMoveIndex,i,ttMove);
+            //uint temp = currentLegalMoves[i];
+            //currentLegalMoves[i] = currentLegalMoves[bestMoveIndex];
+            //currentLegalMoves[bestMoveIndex] = temp;
+            uint currentMove = currentLegalMoves[i];
+            board.makeMove(currentMove); 
             int eval = -MinMaxSearch(depth - 1, -beta, -alpha, !isWhite);
-            board.unMakeMove(currentLegalMoves[i]);
+            board.unMakeMove(currentMove);
     
             if (eval > alpha)
             {
@@ -162,7 +187,7 @@ public class Search
                 {
                     hashFlag = TTFlag.EXACT;
                     bestEvaluation = eval;
-                    bestMove = currentLegalMoves[i];
+                    bestMove = currentMove;
                 }
             }
             if (eval >= beta)

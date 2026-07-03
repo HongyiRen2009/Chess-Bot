@@ -1,6 +1,11 @@
 
 using EngineCore;
+using System.ComponentModel;
+using System.Reflection.Metadata.Ecma335;
 using Unity.Mathematics;
+using Unity.VisualScripting;
+using UnityEditor;
+using UnityEditor.VersionControl;
 using UnityEngine;
 
 public class Evaluation
@@ -142,9 +147,20 @@ public class Evaluation
     int[][] midGameTables = {mg_king_table,mg_queen_table,mg_bishop_table,mg_knight_table,mg_rook_table,mg_pawn_table };
     int[][] endGameTables = {eg_king_table,eg_queen_table,eg_bishop_table,eg_knight_table,eg_rook_table,eg_pawn_table };
     int[] phasePoints = { 0, 4, 1, 1, 2, 0 };
-    
-    // Evaluation for white
-    public int EvaluatePosition(Board board, bool isWhite)
+    int whiteMidGameScore = 0;
+    int whiteEndGameScore = 0;
+    int blackMidGameScore = 0;
+    int blackEndGameScore = 0;
+    int phase = 0;
+    public void ResetEvaluation()
+    {
+        whiteMidGameScore = 0;
+        whiteEndGameScore = 0;
+        blackMidGameScore = 0;
+        blackEndGameScore = 0;
+        phase = 0;
+    }
+    public int FullEvaluation(Board board,bool isWhite)
     {
         int whiteMaterial = 0;
         int blackMaterial = 0;
@@ -155,8 +171,8 @@ public class Evaluation
             midgameWeight += phasePoints[piece % 6] * math.countbits(bitboards[piece]);
         }
         midgameWeight /= 24f;
-        float endgameWeight = 1.0f- midgameWeight;
-        
+        float endgameWeight = 1.0f - midgameWeight;
+
         for (int piece = 0; piece < bitboards.Length; piece++)
         {
             int addEvalAmount = 0;
@@ -166,9 +182,9 @@ public class Evaluation
             {
                 int pieceSquare = BitScanner.BitScanForward(currBitboard);
                 int tableIndex = pieceSquare;
-                if (piece>=6) tableIndex ^= 56;
-                
-                addEvalAmount+= (int)Mathf.Lerp(midGameTables[piece % 6][tableIndex], endGameTables[piece % 6][tableIndex], endgameWeight);
+                if (piece >= 6) tableIndex ^= 56;
+
+                addEvalAmount += (int)Mathf.Lerp(midGameTables[piece % 6][tableIndex], endGameTables[piece % 6][tableIndex], endgameWeight);
                 addEvalAmount += materialValue;
                 currBitboard &= ~(1ul << pieceSquare);
             }
@@ -190,6 +206,46 @@ public class Evaluation
 
         int perspective = isWhite ? 1 : -1;
         return evaluation * perspective;
+    }
+    private int GetKingCornerEvaluation(Board board)
+    {
+        float endgameWeight = 1.0f - phase / 24f;
+        int whiteKingSquare = board.GetKingSquare(true);
+        int blackKingSquare = board.GetKingSquare(false);
+
+        bool whiteIsWinning = (whiteMidGameScore + whiteEndGameScore) > (blackMidGameScore + blackEndGameScore);
+        int strongKingSquare = whiteIsWinning ? whiteKingSquare : blackKingSquare;
+        int weakKingSquare = whiteIsWinning ? blackKingSquare : whiteKingSquare;
+        int sign = whiteIsWinning ? 1 : -1;
+
+        return sign * ForceKingToCornerEval(strongKingSquare, weakKingSquare, endgameWeight);
+    }
+    public void UpdateEvaluation(Board board,int pieceModified, bool added, int square)
+    {
+
+        int modifySign = added ? 1 : -1;
+        int tableIndex = square;
+        phase += phasePoints[pieceModified % 6] * modifySign;
+        if (pieceModified < 6)
+        {
+            whiteMidGameScore+= modifySign * (midGamePieceValues[pieceModified % 6] + midGameTables[pieceModified % 6][tableIndex]);
+            whiteEndGameScore+= modifySign * (endGamePieceValues[pieceModified % 6] + endGameTables[pieceModified % 6][tableIndex]);
+        }
+        else
+        {
+            tableIndex ^= 56;
+            blackMidGameScore += modifySign * (midGamePieceValues[pieceModified % 6] + midGameTables[pieceModified % 6][tableIndex]);
+            blackEndGameScore += modifySign * (endGamePieceValues[pieceModified % 6] + endGameTables[pieceModified % 6][tableIndex]);
+        }
+        
+    }
+    public int GetEvaluation(Board board,bool isWhite)
+    {
+        int whiteEvaluation = (whiteMidGameScore * phase + whiteEndGameScore * (24 - phase)) / 24;
+        int blackEvaluation = (blackMidGameScore * phase + blackEndGameScore * (24 - phase)) / 24;
+        int score = whiteEvaluation - blackEvaluation;
+        score += GetKingCornerEvaluation(board);
+        return isWhite ? score : -score;
     }
 
     private int ForceKingToCornerEval(int strongKingSquare, int weakKingSquare, float endgameWeight)
