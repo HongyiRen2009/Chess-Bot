@@ -17,6 +17,7 @@ public class ChessEngine : MonoBehaviour
     [SerializeField] private string fenStartingPosition;
     [SerializeField] private int depthToSearchTo;
     [SerializeField] private bool doPerftTest = false;
+    [SerializeField] private float thinkingTimeInMilliseconds = 0.1f;
     static readonly ProfilerMarker s_MyMarker = new ProfilerMarker("Search");
     public uint getBestMove(bool isWhite)
     {
@@ -52,7 +53,7 @@ public class ChessEngine : MonoBehaviour
         board = new Board(evaluation);
         moveGenerator = new MoveGenerator(board);
         perftTester = new PerftTester(board, moveGenerator);
-        search = new Search(board, moveGenerator, evaluation);
+        search = new Search(board, moveGenerator, evaluation, thinkingTimeInMilliseconds);
         perftTester.outputDepth = depthToSearchTo;
         isWhiteMove = board.convertFenStringToBitBoard(fenStartingPosition);
         moveGenerator.generateMoves(isWhiteMove);

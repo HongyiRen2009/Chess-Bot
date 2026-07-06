@@ -348,40 +348,93 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
         blackAttackingSquares = 0;
         if (isWhite)
         {
-            blackAttackingSquares = generatePawnMoves(false, !isWhite) |
-                generateKnightMoves(false, !isWhite) |
-                generateBishopMoves(false, !isWhite) |
-                generateRookMoves(false, !isWhite) |
-                generateQueenMoves(false, !isWhite) |
-                generateKingMoves(false, !isWhite);
+            blackAttackingSquares = generatePawnMoves(false, !isWhite,false) |
+                generateKnightMoves(false, !isWhite, false) |
+                generateBishopMoves(false, !isWhite, false) |
+                generateRookMoves(false, !isWhite, false) |
+                generateQueenMoves(false, !isWhite, false) |
+                generateKingMoves(false, !isWhite, false);
             checkMask = generateCheckBlockerMaskAndKingXrayMask(isWhite);
             generatePinMask(isWhite);
-            whiteAttackingSquares = generatePawnMoves(true, isWhite) |
-                generateKnightMoves(true, isWhite) |
-                generateBishopMoves(true, isWhite) |
-                generateRookMoves(true, isWhite) |
-                generateQueenMoves(true, isWhite) |
-                generateKingMoves(true, isWhite);
+            whiteAttackingSquares = generatePawnMoves(true, isWhite, false) |
+                generateKnightMoves(true, isWhite, false) |
+                generateBishopMoves(true, isWhite, false) |
+                generateRookMoves(true, isWhite, false) |
+                generateQueenMoves(true, isWhite, false) |
+                generateKingMoves(true, isWhite, false);
 
         }
         else
         {
 
-            whiteAttackingSquares = generatePawnMoves(true, isWhite) |
-                generateKnightMoves(true, isWhite) |
-                generateBishopMoves(true, isWhite) |
-                generateRookMoves(true, isWhite) |
-                generateQueenMoves(true, isWhite) |
-                generateKingMoves(true, isWhite);
+            whiteAttackingSquares = generatePawnMoves(true, isWhite, false) |
+                generateKnightMoves(true, isWhite, false) |
+                generateBishopMoves(true, isWhite, false) |
+                generateRookMoves(true, isWhite, false) |
+                generateQueenMoves(true, isWhite, false) |
+                generateKingMoves(true, isWhite, false);
             checkMask = generateCheckBlockerMaskAndKingXrayMask(isWhite);
             generatePinMask(isWhite);
 
-            blackAttackingSquares = generatePawnMoves(false, !isWhite) |
-                generateKnightMoves(false, !isWhite) |
-                generateBishopMoves(false, !isWhite) |
-                generateRookMoves(false, !isWhite) |
-                generateQueenMoves(false, !isWhite) |
-                generateKingMoves(false, !isWhite);
+            blackAttackingSquares = generatePawnMoves(false, !isWhite, false) |
+                generateKnightMoves(false, !isWhite, false) |
+                generateBishopMoves(false, !isWhite, false) |
+                generateRookMoves(false, !isWhite, false) |
+                generateQueenMoves(false, !isWhite, false) |
+                generateKingMoves(false, !isWhite, false);
+
+        }
+
+        uint[] returnMoves = new uint[moveIndex];
+        Array.Copy(moveList, returnMoves, moveIndex);
+        return returnMoves;
+
+    }
+    public uint[] generateCaptures(bool isWhite)
+    {
+        pawnsChecking = 0;
+        knightsChecking = 0;
+        moveIndex = 0;
+        checkMask = 0;
+        pinnedSquaresMask = 0ul;
+        whiteAttackingSquares = 0;
+        blackAttackingSquares = 0;
+        if (isWhite)
+        {
+            blackAttackingSquares = generatePawnMoves(false, !isWhite,true) |
+                generateKnightMoves(false, !isWhite, true) |
+                generateBishopMoves(false, !isWhite, true) |
+                generateRookMoves(false, !isWhite, true) |
+                generateQueenMoves(false, !isWhite, true) |
+                generateKingMoves(false, !isWhite, true);
+            checkMask = generateCheckBlockerMaskAndKingXrayMask(isWhite);
+            generatePinMask(isWhite);
+            whiteAttackingSquares = generatePawnMoves(true, isWhite,true) |
+                generateKnightMoves(true, isWhite,true) |
+                generateBishopMoves(true, isWhite, true) |
+                generateRookMoves(true, isWhite, true) |
+                generateQueenMoves(true, isWhite, true) |
+                generateKingMoves(true, isWhite, true);
+
+        }
+        else
+        {
+
+            whiteAttackingSquares = generatePawnMoves(true, isWhite, true) |
+                generateKnightMoves(true, isWhite, true) |
+                generateBishopMoves(true, isWhite, true) |
+                generateRookMoves(true, isWhite, true) |
+                generateQueenMoves(true, isWhite, true) |
+                generateKingMoves(true, isWhite, true);
+            checkMask = generateCheckBlockerMaskAndKingXrayMask(isWhite);
+            generatePinMask(isWhite);
+
+            blackAttackingSquares = generatePawnMoves(false, !isWhite, true) |
+                generateKnightMoves(false, !isWhite, true) |
+                generateBishopMoves(false, !isWhite, true) |
+                generateRookMoves(false, !isWhite, true) |
+                generateQueenMoves(false, !isWhite, true) |
+                generateKingMoves(false, !isWhite, true);
 
         }
 
@@ -472,7 +525,7 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
         if ((pinnedSquaresMask & (1ul << pieceSquare)) == 0) return ~0ul;
         return pinMasks[pieceSquare];
     }
-    private ulong generatePawnMoves(bool isWhite, bool addMove)
+    private ulong generatePawnMoves(bool isWhite, bool addMove,bool onlyCaptures)
     {
         ulong pawnBitBoard = board.GetBitboard(Piece.uncoloredPawn, isWhite);
         ulong attackingSquares = 0;
@@ -493,8 +546,10 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
             rightPawnCaptureBitboard &= ~(0x0101010101010101ul);
         }
         attackingSquares = leftPawnCaptureBitboard | rightPawnCaptureBitboard;
-        leftPawnCaptureBitboard &= board.GetCombinedBitboard(!isWhite) | (1ul << board.GetEnpassentTargetSquare());
-        rightPawnCaptureBitboard &= board.GetCombinedBitboard(!isWhite) | (1ul << board.GetEnpassentTargetSquare());
+        int epSquare = board.GetEnpassentTargetSquare();
+        ulong enPassantBit = (epSquare == 64) ? 0ul : (1ul << epSquare);
+        leftPawnCaptureBitboard &= board.GetCombinedBitboard(!isWhite) | enPassantBit;
+        rightPawnCaptureBitboard &= board.GetCombinedBitboard(!isWhite) | enPassantBit;
         if ((leftPawnCaptureBitboard & board.GetBitboard(Piece.uncoloredKing, !isWhite)) != 0)
         {
             pawnsChecking |= (leftPawnCaptureBitboard & board.GetBitboard(Piece.uncoloredKing, !isWhite));
@@ -537,10 +592,15 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
             ulong[] pawnMoveBitBoards = { leftPawnCaptureBitboard, rightPawnCaptureBitboard, currentPawnPushBitboard, currentPawnDoublePushBitboard };
             int[] whiteTargetSquareOffsets = { DirectionOffsets.leftUp, DirectionOffsets.rightUp, DirectionOffsets.up, DirectionOffsets.up * 2 };
             int[] blackTargetSquareOffsets = { DirectionOffsets.leftDown, DirectionOffsets.rightDown, DirectionOffsets.down, DirectionOffsets.down * 2 };
-            for (int i = 0; i < 4; i++)
+            int stopIndex = onlyCaptures ? 3 : 4;
+            for (int i = 0; i < stopIndex; i++)
             {
                 ulong currentPawnMoveBitboard = pawnMoveBitBoards[i];
-
+                if (onlyCaptures && i == 2)
+                {
+                    if (isWhite) currentPawnMoveBitboard &= 0xff;
+                    else currentPawnMoveBitboard&= 0xff00000000000000;
+                }
                 while (currentPawnMoveBitboard != 0)
                 {
                     int targetSquare = BitScanner.BitScanForward(currentPawnMoveBitboard);
@@ -585,7 +645,7 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
         return attackingSquares;
 
     }
-    private ulong generateKnightMoves(bool isWhite, bool addMove)
+    private ulong generateKnightMoves(bool isWhite, bool addMove,bool onlyCaptures)
     {
         ulong knightBitboard = board.GetBitboard(Piece.uncoloredKnight, isWhite);
         ulong currentKnightAttackingSquaresBitboard = 0;
@@ -596,6 +656,7 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
             ulong currentKnightTargetSquareBitboard = knightMovesTable[startSquare];
             currentKnightAttackingSquaresBitboard |= currentKnightTargetSquareBitboard;
             currentKnightTargetSquareBitboard &= ~(board.GetCombinedBitboard(isWhite));
+            if (onlyCaptures) currentKnightTargetSquareBitboard &= board.GetCombinedBitboard(!isWhite);
             if ((currentKnightTargetSquareBitboard & board.GetBitboard(Piece.uncoloredKing, !isWhite)) != 0)
             {
                 knightsChecking |= (1ul << startSquare);
@@ -617,7 +678,7 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
         }
         return currentKnightAttackingSquaresBitboard;
     }
-    private ulong generateRookMoves(bool isWhite, bool addMove)
+    private ulong generateRookMoves(bool isWhite, bool addMove,bool onlyCaptures)
     {
         ulong currentRookBitboard = board.GetBitboard(Piece.uncoloredRook, isWhite);
         ulong currentRookAttackingSquaresBitboard = 0;
@@ -627,6 +688,7 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
             ulong currentRookMoveSquaresBitboard = rookMagicBitboard[startSquare, (((board.GetAllBlockersBitboard(isWhite)) & rookRays[startSquare]) * rookMagics[startSquare]) >> (64 - rookIndexBits[startSquare])];
             currentRookAttackingSquaresBitboard |= currentRookMoveSquaresBitboard;
             currentRookMoveSquaresBitboard &= ~(board.GetCombinedBitboard(isWhite));
+            if (onlyCaptures) currentRookMoveSquaresBitboard &= board.GetCombinedBitboard(!isWhite);
             currentRookBitboard &= ~(1ul << startSquare);
 
             if (!addMove) continue;
@@ -647,7 +709,7 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
         }
         return currentRookAttackingSquaresBitboard;
     }
-    private ulong generateBishopMoves(bool isWhite, bool addMove)
+    private ulong generateBishopMoves(bool isWhite, bool addMove,bool onlyCaptures)
     {
         ulong currentBishopBitboard = board.GetBitboard(Piece.uncoloredBishop, isWhite);
         ulong currentBishopAttackingSquaresBitboard = 0;
@@ -659,6 +721,7 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
 
             currentBishopAttackingSquaresBitboard |= currentBishopMoveSquaresBitboard;
             currentBishopMoveSquaresBitboard &= ~(board.GetCombinedBitboard(isWhite));
+            if (onlyCaptures) currentBishopMoveSquaresBitboard &= board.GetCombinedBitboard(!isWhite);
             currentBishopBitboard &= ~(1ul << startSquare);
 
             if (!addMove) continue;
@@ -679,7 +742,7 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
         return currentBishopAttackingSquaresBitboard;
     }
 
-    private ulong generateQueenMoves(bool isWhite, bool addMove)
+    private ulong generateQueenMoves(bool isWhite, bool addMove,bool onlyCaptures)
     {
         ulong currentQueenBitboard = board.GetBitboard(Piece.uncoloredQueen, isWhite);
         ulong currentQueenAttackingSquaresBitboard = 0;
@@ -690,6 +753,7 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
             ulong currentQueenMoveSquaresBitboard = (rookMagicBitboard[startSquare, (((board.GetAllBlockersBitboard(isWhite)) & rookRays[startSquare]) * rookMagics[startSquare]) >> (64 - rookIndexBits[startSquare])] | bishopMagicBitboard[startSquare, (((board.GetAllBlockersBitboard(isWhite)) & bishopRays[startSquare]) * bishopMagics[startSquare]) >> (64 - bishopIndexBits[startSquare])]);
             currentQueenAttackingSquaresBitboard |= currentQueenMoveSquaresBitboard;
             currentQueenMoveSquaresBitboard &= ~(board.GetCombinedBitboard(isWhite));
+            if (onlyCaptures) currentQueenMoveSquaresBitboard &= board.GetCombinedBitboard(!isWhite);
             currentQueenBitboard &= ~(1ul << startSquare);
             if (!addMove) continue;
             currentQueenMoveSquaresBitboard &= getPinMask(startSquare);
@@ -708,7 +772,7 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
         }
         return currentQueenAttackingSquaresBitboard;
     }
-    private ulong generateKingMoves(bool isWhite, bool addMove)
+    private ulong generateKingMoves(bool isWhite, bool addMove, bool onlyCaptures)
     {
         ulong currentKingBitboard = board.GetBitboard(Piece.uncoloredKing, isWhite);
         int startSquare = BitScanner.BitScanForward(currentKingBitboard);
@@ -717,22 +781,25 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
         {
             ulong currentKingMoveSquaresBitboard = currentKingAttackSquaresBitboard;
             currentKingMoveSquaresBitboard &= ~(board.GetCombinedBitboard(isWhite));
+            if (onlyCaptures) currentKingMoveSquaresBitboard &= board.GetCombinedBitboard(!isWhite);
             currentKingMoveSquaresBitboard &= ~(isWhite ? blackAttackingSquares : whiteAttackingSquares);
             while (currentKingMoveSquaresBitboard != 0)
             {
                 int targetSquare = BitScanner.BitScanForward(currentKingMoveSquaresBitboard);
                 moveList[moveIndex++] = Move.CreateMove(startSquare, targetSquare,
                     (isWhite ? Piece.whiteKing : Piece.blackKing),
-                    board.getCapturePiece( targetSquare),
+                    board.getCapturePiece(targetSquare),
                     board.GetCastlePiecesMovedMask());
 
                 currentKingMoveSquaresBitboard &= ~(1ul << targetSquare);
             }
+            if (onlyCaptures) return currentKingAttackSquaresBitboard;
             if (isWhite)
             {
-                if (board.hasCastlePieceNotMoved(CastlePiece.whiteKing) && (blackAttackingSquares & currentKingBitboard) == 0)
+
+                if ((blackAttackingSquares & currentKingBitboard) == 0)
                 {
-                    if (((blackAttackingSquares & 0x0c00000000000000ul) == 0 && (board.GetAllPiecesBitboard() & 0x0e00000000000000ul) == 0 && board.hasCastlePieceNotMoved(CastlePiece.whiteLeftRook)))
+                    if (((blackAttackingSquares & 0x0c00000000000000ul) == 0 && (board.GetAllPiecesBitboard() & 0x0e00000000000000ul) == 0 && board.hasCastlePieceNotMoved(CastlePiece.whiteQueenside)))
                     {
                         moveList[moveIndex++] = Move.CreateMove(startSquare, 58,
                             Piece.whiteKing,
@@ -740,9 +807,8 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
                             board.GetCastlePiecesMovedMask(),
                             Piece.none,
                             true);
-
                     }
-                    if ((((blackAttackingSquares | board.GetAllPiecesBitboard()) & 0x6000000000000000ul) == 0 && board.hasCastlePieceNotMoved(CastlePiece.whiteRightRook)))
+                    if ((((blackAttackingSquares | board.GetAllPiecesBitboard()) & 0x6000000000000000ul) == 0 && board.hasCastlePieceNotMoved(CastlePiece.whiteKingside)))
                     {
                         moveList[moveIndex++] = Move.CreateMove(startSquare, 62,
                             Piece.whiteKing,
@@ -755,9 +821,9 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
             }
             else
             {
-                if (board.hasCastlePieceNotMoved(CastlePiece.blackKing) && (whiteAttackingSquares & currentKingBitboard) == 0)
+                if ((whiteAttackingSquares & currentKingBitboard) == 0)
                 {
-                    if ((((whiteAttackingSquares) & 0b0001100ul) == 0 && (board.GetAllPiecesBitboard() & 0b0001110ul) == 0 && board.hasCastlePieceNotMoved(CastlePiece.blackLeftRook)))
+                    if ((((whiteAttackingSquares) & 0b0001100ul) == 0 && (board.GetAllPiecesBitboard() & 0b0001110ul) == 0 && board.hasCastlePieceNotMoved(CastlePiece.blackQueenside)))
                     {
                         moveList[moveIndex++] = Move.CreateMove(startSquare, 2,
                             Piece.blackKing,
@@ -766,7 +832,7 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
                             Piece.none,
                             true);
                     }
-                    if ((((whiteAttackingSquares | board.GetAllPiecesBitboard()) & 0b1100000ul) == 0 && board.hasCastlePieceNotMoved(CastlePiece.blackRightRook)))
+                    if ((((whiteAttackingSquares | board.GetAllPiecesBitboard()) & 0b1100000ul) == 0 && board.hasCastlePieceNotMoved(CastlePiece.blackKingside)))
                     {
                         moveList[moveIndex++] = Move.CreateMove(startSquare, 6,
                             Piece.blackKing,

@@ -1,5 +1,6 @@
 using EngineCore;
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using UnityEngine;
 
@@ -11,8 +12,14 @@ public class Board
     private ulong blackPiecesBitboard;
     private uint CastlePiecesMoved = 0;
     private int enPassentTargetSquare = 64;
-    private int prevEnPassentTargetSquare = 64;
     private ulong[,] zobristTable = new ulong[64, 12];
+    private ulong zobristSideToMove;
+    private ulong[] zobristCastling = new ulong[16];
+    private ulong[] zobristEnPassantFile = new ulong[8];
+    private bool whiteToMove = true;
+    private Stack<int> enPassantHistory = new Stack<int>();
+    private Stack<uint> castleRightsHistory = new Stack<uint>();
+
     private ulong zobristHash;
     private Evaluation evaluation;
     public ulong GetRandomULong()
@@ -27,12 +34,17 @@ public class Board
     {
         this.evaluation = evaluation;
         for (int i = 0; i < 64; i++)
-        {
             for (int piece = 0; piece < 12; piece++)
-            {
                 zobristTable[i, piece] = GetRandomULong();
-            }
-        }
+
+        zobristSideToMove = GetRandomULong();
+        for (int i = 0; i < 16; i++) zobristCastling[i] = GetRandomULong();
+        for (int i = 0; i < 8; i++) zobristEnPassantFile[i] = GetRandomULong();
+    }
+
+    private void XorEnPassant(int square)
+    {
+        if (square != 64) zobristHash ^= zobristEnPassantFile[square % 8];
     }
     public int GetKingSquare(bool isWhite)
     {
@@ -174,16 +186,16 @@ public class Board
         switch (fenChar)
         {
             case 'K':
-                CastlePiecesMoved &= ~CastlePiece.whiteRightRook;
+                CastlePiecesMoved &= ~CastlePiece.whiteKingside;
                 break;
             case 'Q':
-                CastlePiecesMoved &= ~CastlePiece.whiteLeftRook;
+                CastlePiecesMoved &= ~CastlePiece.whiteQueenside;
                 break;
             case 'k':
-                CastlePiecesMoved &= ~CastlePiece.blackRightRook;
+                CastlePiecesMoved &= ~CastlePiece.blackKingside;
                 break;
             case 'q':
-                CastlePiecesMoved &= ~CastlePiece.blackLeftRook;
+                CastlePiecesMoved &= ~CastlePiece.blackQueenside;
                 break;
         }
     }
@@ -203,8 +215,7 @@ public class Board
                 informationTypeIndex++;
                 if (informationTypeIndex == 2)
                 {
-                    CastlePiecesMoved = 0; //Both rooks have moved (they will be set back based on infromation given in the fen string)
-                    CastlePiecesMoved |= CastlePiece.whiteRightRook | CastlePiece.whiteLeftRook | CastlePiece.blackRightRook | CastlePiece.blackLeftRook;
+                    CastlePiecesMoved = CastlePiece.all;
                 }
 
             }
@@ -226,6 +237,13 @@ public class Board
                 case 2:
                     addFenCharCastleRights(fenString[i]);
                     break;
+                case 3:
+                    if (Array.IndexOf(Utils.letters, fenString[i])!=-1)
+                    {
+                        enPassentTargetSquare =((int.Parse(fenString[i + 1].ToString())-1)*8+ Array.IndexOf(Utils.letters, fenString[i])) ^ 56;
+                        informationTypeIndex++;
+                    }
+                    break;
 
             }
 
@@ -239,6 +257,10 @@ public class Board
 
     public void makeMove(uint move)
     {
+        zobristHash ^= zobristCastling[CastlePiecesMoved];
+        XorEnPassant(enPassentTargetSquare);
+        enPassantHistory.Push(enPassentTargetSquare);
+        castleRightsHistory.Push(CastlePiecesMoved);
         int sourceSquare = Move.GetSourceSquare(move);
         int targetSquare = Move.GetTargetSquare(move);
         int movePiece = Move.GetPiece(move);
@@ -252,54 +274,21 @@ public class Board
         switch (movePiece)
         {
             case Piece.whiteKing:
-                if ((CastlePiecesMoved & CastlePiece.whiteKing) == 0)
-                {
-                    CastlePiecesMoved |= CastlePiece.whiteKing;
-                }
+                CastlePiecesMoved |= CastlePiece.whiteKingside | CastlePiece.whiteQueenside;
                 break;
             case Piece.blackKing:
-                if ((CastlePiecesMoved & CastlePiece.blackKing) == 0)
-                {
-                    CastlePiecesMoved |= CastlePiece.blackKing;
-                }
+                CastlePiecesMoved |= CastlePiece.blackKingside | CastlePiece.blackQueenside;
                 break;
             case Piece.whiteRook:
-                if (sourceSquare == 56)
-                {
-                    if ((CastlePiecesMoved & CastlePiece.whiteLeftRook) == 0)
-                    {
-                        CastlePiecesMoved |= CastlePiece.whiteLeftRook;
-                    }
-                    break;
-                }
-                else if (sourceSquare == 63)
-                {
-                    if ((CastlePiecesMoved & CastlePiece.whiteRightRook) == 0)
-                    {
-                        CastlePiecesMoved |= CastlePiece.whiteRightRook;
-                    }
-                    break;
-                }
+                if (sourceSquare == 56) CastlePiecesMoved |= CastlePiece.whiteQueenside; // a1 rook
+                else if (sourceSquare == 63) CastlePiecesMoved |= CastlePiece.whiteKingside; // h1 rook
                 break;
             case Piece.blackRook:
-                if (sourceSquare == 0)
-                {
-                    if ((CastlePiecesMoved & CastlePiece.blackLeftRook) == 0)
-                    {
-                        CastlePiecesMoved |= CastlePiece.blackLeftRook;
-                    }
-                    break;
-                }
-                else if (sourceSquare == 7)
-                {
-                    if ((CastlePiecesMoved & CastlePiece.blackRightRook) == 0)
-                    {
-                        CastlePiecesMoved |= CastlePiece.blackRightRook;
-                    }
-                    break;
-                }
+                if (sourceSquare == 0) CastlePiecesMoved |= CastlePiece.blackQueenside; // a8 rook
+                else if (sourceSquare == 7) CastlePiecesMoved |= CastlePiece.blackKingside; // h8 rook
                 break;
         }
+        enPassentTargetSquare = 64;
 
         if (isCastling)
         {
@@ -349,32 +338,12 @@ public class Board
                 switch (capturePiece)
                 {
                     case Piece.whiteRook:
-                        if (targetSquare == 56)
-                        {
-                            if ((CastlePiecesMoved & CastlePiece.whiteLeftRook) == 0)
-                                CastlePiecesMoved |= CastlePiece.whiteLeftRook;
-                            break;
-                        }
-                        else if (targetSquare == 63)
-                        {
-                            if ((CastlePiecesMoved & CastlePiece.whiteRightRook) == 0)
-                                CastlePiecesMoved |= CastlePiece.whiteRightRook;
-                            break;
-                        }
+                        if (targetSquare == 56) CastlePiecesMoved |= CastlePiece.whiteQueenside;
+                        else if (targetSquare == 63) CastlePiecesMoved |= CastlePiece.whiteKingside;
                         break;
                     case Piece.blackRook:
-                        if (targetSquare == 0)
-                        {
-                            if ((CastlePiecesMoved & CastlePiece.blackLeftRook) == 0)
-                                CastlePiecesMoved |= CastlePiece.blackLeftRook;
-                            break;
-                        }
-                        else if (targetSquare == 7)
-                        {
-                            if ((CastlePiecesMoved & CastlePiece.blackRightRook) == 0)
-                                CastlePiecesMoved |= CastlePiece.blackRightRook;
-                            break;
-                        }
+                        if (targetSquare == 0) CastlePiecesMoved |= CastlePiece.blackQueenside;
+                        else if (targetSquare == 7) CastlePiecesMoved |= CastlePiece.blackKingside;
                         break;
                 }
             }
@@ -382,17 +351,22 @@ public class Board
             int pieceToPlace = promotionPiece != Piece.none ? promotionPiece : movePiece;
             AddPiece(pieceToPlace, targetSquare);
 
-            prevEnPassentTargetSquare = enPassentTargetSquare;
-            enPassentTargetSquare = 64;
             if (isDoublePawnPush)
             {
                 enPassentTargetSquare = targetSquare + (isWhite ? 8 : -8);
             }
+
         }
+        zobristHash ^= zobristCastling[CastlePiecesMoved];
+        XorEnPassant(enPassentTargetSquare);
+        zobristHash ^= zobristSideToMove;
+        whiteToMove = !whiteToMove;
     }
 
     public void unMakeMove(uint move)
     {
+        zobristHash ^= zobristCastling[CastlePiecesMoved];
+        XorEnPassant(enPassentTargetSquare);
         int sourceSquare = Move.GetSourceSquare(move);
         int targetSquare = Move.GetTargetSquare(move);
         int movePiece = Move.GetPiece(move);
@@ -402,41 +376,6 @@ public class Board
         bool isEnPassent = Move.IsEnPassent(move);
         bool isCastling = Move.IsCastling(move);
         bool isDoublePawnPush = Move.IsDoublePush(move);
-        bool isRemovingCastlingPrivilege = Move.IsRemovingCastlePrivileges(move);
-
-        if (isRemovingCastlingPrivilege)
-        {
-            switch (movePiece)
-            {
-                case Piece.whiteKing:
-                    CastlePiecesMoved &= ~CastlePiece.whiteKing;
-                    break;
-                case Piece.blackKing:
-                    CastlePiecesMoved &= ~CastlePiece.blackKing;
-                    break;
-                case Piece.whiteRook:
-                    if (sourceSquare == 56)
-                    {
-                        CastlePiecesMoved &= ~CastlePiece.whiteLeftRook;
-                    }
-                    else if (sourceSquare == 63)
-                    {
-                        CastlePiecesMoved &= ~CastlePiece.whiteRightRook;
-                    }
-                    break;
-                case Piece.blackRook:
-                    if (sourceSquare == 0)
-                    {
-                        CastlePiecesMoved &= ~CastlePiece.blackLeftRook;
-                    }
-                    else if (sourceSquare == 7)
-                    {
-                        CastlePiecesMoved &= ~CastlePiece.blackRightRook;
-                    }
-                    break;
-            }
-        }
-
         if (isCastling)
         {
             if (isWhite)
@@ -483,29 +422,14 @@ public class Board
                 int enPassentOffset = 0;
                 if (isEnPassent) enPassentOffset += (isWhite ? 8 : -8);
                 AddPiece(capturePiece, targetSquare + enPassentOffset);
-
-                if (isRemovingCastlingPrivilege)
-                {
-                    switch (capturePiece)
-                    {
-                        case Piece.whiteRook:
-                            if (targetSquare == 56) CastlePiecesMoved &= ~CastlePiece.whiteLeftRook;
-                            else if (targetSquare == 63) CastlePiecesMoved &= ~CastlePiece.whiteRightRook;
-                            break;
-                        case Piece.blackRook:
-                            if (targetSquare == 0) CastlePiecesMoved &= ~CastlePiece.blackLeftRook;
-                            else if (targetSquare == 7) CastlePiecesMoved &= ~CastlePiece.blackRightRook;
-                            break;
-                    }
-                }
             }
-
-            enPassentTargetSquare = 64;
-            if (prevEnPassentTargetSquare != 64)
-            {
-                enPassentTargetSquare = prevEnPassentTargetSquare;
-                prevEnPassentTargetSquare = 64;
-            }
+            
         }
+        enPassentTargetSquare = enPassantHistory.Pop();
+        CastlePiecesMoved = castleRightsHistory.Pop();
+        zobristHash ^= zobristCastling[CastlePiecesMoved];
+        XorEnPassant(enPassentTargetSquare);
+        zobristHash ^= zobristSideToMove;
+        whiteToMove = !whiteToMove;
     }
 }

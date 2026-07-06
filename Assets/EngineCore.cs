@@ -55,14 +55,14 @@ namespace EngineCore
         public const int leftDown = 7;
         public const int rightDown = 9;
     }
-    public class CastlePiece
+    public static class CastlePiece
     {
-        public const uint whiteKing = 1;
-        public const uint whiteLeftRook = 2;
-        public const uint whiteRightRook = 4;
-        public const uint blackKing = 8;
-        public const uint blackLeftRook = 16;
-        public const uint blackRightRook = 32;
+        public const uint whiteKingside = 1;
+        public const uint whiteQueenside = 2;
+        public const uint blackKingside = 4;
+        public const uint blackQueenside = 8;
+
+        public const uint all = whiteKingside | whiteQueenside | blackKingside | blackQueenside;
     }
     public static class BitScanner
     {
@@ -148,7 +148,7 @@ namespace EngineCore
     public static class Utils
     {
         public static string[] pieceToString = { "K", "Q", "B", "N", "R", "P", "k", "q", "b", "n", "r", "p", "" };
-        private static string[] letters = { "a", "b", "c", "d", "e", "f", "g", "h" };
+        public static char[] letters = { 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h' };
         private static int[] pieceValues = new int[12] { 0, 900, 300, 300, 500, 100, 0, 900, 300, 300, 500, 100, };
         public static int GetPieceValue(int piece)
         {
@@ -163,13 +163,13 @@ namespace EngineCore
             switch (piece)
             {
                 case Piece.whiteKing:
-                    if ((CastlePiecesMoved & CastlePiece.whiteKing) == 0)
+                    if ((CastlePiecesMoved & (CastlePiece.whiteKingside | CastlePiece.whiteQueenside)) != (CastlePiece.whiteKingside | CastlePiece.whiteQueenside))
                     {
                         return true;
                     }
                     break;
                 case Piece.blackKing:
-                    if ((CastlePiecesMoved & CastlePiece.blackKing) == 0)
+                    if ((CastlePiecesMoved & (CastlePiece.blackKingside | CastlePiece.blackQueenside)) != (CastlePiece.blackKingside | CastlePiece.blackQueenside))
                     {
                         return true;
                     }
@@ -177,80 +177,51 @@ namespace EngineCore
                 case Piece.whiteRook:
                     if (sourceSquare == 56)
                     {
-                        if ((CastlePiecesMoved & CastlePiece.whiteLeftRook) == 0)
-                        {
-                            return true;
-                        }
+                        if ((CastlePiecesMoved & CastlePiece.whiteQueenside) == 0) return true;
                         break;
                     }
                     else if (sourceSquare == 63)
                     {
-                        if ((CastlePiecesMoved & CastlePiece.whiteRightRook) == 0)
-                        {
-                            return true;
-                        }
+                        if ((CastlePiecesMoved & CastlePiece.whiteKingside) == 0) return true;
                         break;
                     }
                     break;
                 case Piece.blackRook:
                     if (sourceSquare == 0)
                     {
-                        if ((CastlePiecesMoved & CastlePiece.blackLeftRook) == 0)
-                        {
-                            return true;
-                        }
+                        if ((CastlePiecesMoved & CastlePiece.blackQueenside) == 0) return true;
                         break;
                     }
                     else if (sourceSquare == 7)
                     {
-                        if ((CastlePiecesMoved & CastlePiece.blackRightRook) == 0)
-                        {
-                            return true;
-                        }
+                        if ((CastlePiecesMoved & CastlePiece.blackKingside) == 0) return true;
                         break;
                     }
                     break;
-
             }
             switch (capturePiece)
             {
                 case Piece.whiteRook:
                     if (targetSquare == 56)
                     {
-                        if ((CastlePiecesMoved & CastlePiece.whiteLeftRook) == 0)
-                        {
-                            CastlePiecesMoved |= CastlePiece.whiteLeftRook;
-                            return true;
-                        }
+                        if ((CastlePiecesMoved & CastlePiece.whiteQueenside) == 0) return true;
                         break;
                     }
                     else if (targetSquare == 63)
                     {
-                        if ((CastlePiecesMoved & CastlePiece.whiteRightRook) == 0)
-                        {
-                            CastlePiecesMoved |= CastlePiece.whiteRightRook;
-                            return true;
-                        }
+                        if ((CastlePiecesMoved & CastlePiece.whiteKingside) == 0) return true;
                         break;
                     }
                     break;
                 case Piece.blackRook:
                     if (targetSquare == 0)
                     {
-                        if ((CastlePiecesMoved & CastlePiece.blackLeftRook) == 0)
-                        {
-                            CastlePiecesMoved |= CastlePiece.blackLeftRook;
-                            return true;
-                        }
+                        if ((CastlePiecesMoved & CastlePiece.blackQueenside) == 0) return true;
                         break;
                     }
                     else if (targetSquare == 7)
                     {
-                        if ((CastlePiecesMoved & CastlePiece.blackRightRook) == 0)
-                        {
-                            CastlePiecesMoved |= CastlePiece.blackRightRook;
-                            return true;
-                        }
+                        if ((CastlePiecesMoved & CastlePiece.blackKingside) == 0) return true;
                         break;
                     }
                     break;

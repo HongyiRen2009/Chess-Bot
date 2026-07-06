@@ -22,9 +22,10 @@ public class ManageBoard : MonoBehaviour
 
     [SerializeField] private ChessEngine chessEngine;
     [SerializeField] private TextMeshProUGUI result;
+    [SerializeField] private bool doEngineMoves;
     private uint[] moves;
     private ManageChessPiece[] pieces = new ManageChessPiece[64];
-    private uint lastMove;
+    private Stack<uint> lastMoves = new Stack<uint>();
     public bool isGameOver;
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
@@ -83,7 +84,7 @@ public class ManageBoard : MonoBehaviour
         string filePath = Path.Combine(Application.dataPath, "moves.txt");
         foreach (uint move in moves)
         {
-            content += Move.GetSourceSquare(move) + " " + Move.GetTargetSquare(move) + Utils.pieceToString[Move.GetPromotionPiece(move)] +"\n";
+            content += Utils.convertBoardIndexToChessNotation(Move.GetSourceSquare(move)) + Utils.convertBoardIndexToChessNotation(Move.GetTargetSquare(move)) + Utils.pieceToString[Move.GetPromotionPiece(move)] +" 1"+"\n";
         }
         File.WriteAllText(filePath, content);
     }
@@ -92,7 +93,7 @@ public class ManageBoard : MonoBehaviour
         int startSquare = Move.GetSourceSquare(move);
         int endSquare = Move.GetTargetSquare(move);
 
-        lastMove = move;
+        lastMoves.Push(move);
         if (pieces[endSquare] != null)
         {
             Destroy(pieces[endSquare].gameObject);
@@ -142,6 +143,7 @@ public class ManageBoard : MonoBehaviour
         }
         pieces[endSquare].setPosition(endSquare);
         chessEngine.makeMove(move);
+        moves = chessEngine.GetCurrentLegalMoves();
         GameState gameState = chessEngine.getGameState(chessEngine.isWhiteMove);
         if (gameState != GameState.Ongoing)
         {
@@ -162,7 +164,8 @@ public class ManageBoard : MonoBehaviour
     }
     public void unMakeLastMove()
     {
-        if (lastMove.Equals(null)) return;
+        if (lastMoves.Count==0) return;
+        uint lastMove = lastMoves.Pop();
         int sourceSquare = Move.GetSourceSquare(lastMove);
         int targetSquare = Move.GetTargetSquare(lastMove);
         int movePiece = Move.GetPiece(lastMove);
@@ -213,8 +216,10 @@ public class ManageBoard : MonoBehaviour
             }
         }
         chessEngine.unMakeMove(lastMove);
-        moves = chessEngine.GetCurrentLegalMoves();
-        lastMove = default;
+        if (!doEngineMoves)
+        {
+            moves = chessEngine.GetCurrentLegalMoves();
+        }
     }
     public void FinishedDraggingChessPiece(int startSquare,int endSquare)
     {
@@ -224,7 +229,7 @@ public class ManageBoard : MonoBehaviour
             if (moves[i].Equals(default)) break;
             if (Move.GetSourceSquare(moves[i]) != startSquare || Move.GetTargetSquare(moves[i]) != endSquare) continue;
             makeMove(moves[i]);
-            if (!isGameOver)
+            if (!isGameOver&&doEngineMoves)
             {
                 engineMakeMove();
             }
