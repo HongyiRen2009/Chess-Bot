@@ -20,12 +20,12 @@ public class ManageBoard : MonoBehaviour
     [SerializeField] private Sprite circle;
     [SerializeField] private Sprite hollowCircle;
 
-    [SerializeField] private ChessEngine chessEngine;
+    [SerializeField] private UnityChessEngine chessEngine;
     [SerializeField] private TextMeshProUGUI result;
     [SerializeField] private bool doEngineMoves;
-    private uint[] moves;
+    private ushort[] moves;
     private ManageChessPiece[] pieces = new ManageChessPiece[64];
-    private Stack<uint> lastMoves = new Stack<uint>();
+    private Stack<ushort> lastMoves = new Stack<ushort>();
     public bool isGameOver;
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
@@ -42,7 +42,7 @@ public class ManageBoard : MonoBehaviour
             ulong bitBoard = chessEngine.getBitboard(piece);
             while (bitBoard > 0)
             {
-                int pieceSquare = BitScanner.BitScanForward(bitBoard);
+                int pieceSquare = BitOperations.BitScanForward(bitBoard);
                 GameObject currPiece = Instantiate(chessPiece, piece<6 ? whiteBoardPiecesTransform:blackBoardPiecesTransform);
                 pieces[pieceSquare] = currPiece.GetComponent<ManageChessPiece>();
                 pieces[pieceSquare].Initialize(pieceSquare, piece,this);
@@ -68,27 +68,34 @@ public class ManageBoard : MonoBehaviour
             if (moves[i].Equals(default)) break;
             if (Move.GetSourceSquare(moves[i]) == startSquare)
             {
+                int sourceSquare = Move.GetSourceSquare(moves[i]);
+                int targetSquare = Move.GetTargetSquare(moves[i]);
+                int movePiece = chessEngine.GetPiece(sourceSquare);
+                bool isPiecePawn = (movePiece == Piece.whitePawn || movePiece == Piece.blackPawn);
+                bool movedTwoSquaresAway = Math.Abs(sourceSquare - targetSquare) == 16;
+                bool isDoublePawnPush = isPiecePawn && movedTwoSquaresAway;
+                bool isEnPassent = isPiecePawn && targetSquare == chessEngine.GetEnpassentTargetSquare() && targetSquare != 64;
                 GameObject currBoardCircle = Instantiate(boardCircles, boardCirclesTransform);
                 currBoardCircle.GetComponent<RectTransform>().anchoredPosition = new Vector2((Move.GetTargetSquare(moves[i]) % 8) * 133, Mathf.Floor(Move.GetTargetSquare(moves[i]) / 8) * -133);
-                currBoardCircle.GetComponent<Image>().sprite = Move.GetCapturedPiece(moves[i]) == Piece.none || Move.IsEnPassent(moves[i]) ? circle : hollowCircle;
+                currBoardCircle.GetComponent<Image>().sprite = chessEngine.GetPiece(Move.GetTargetSquare(moves[i])) == Piece.none || isEnPassent ? circle : hollowCircle;
             }
         }
         boardCirclesTransform.SetAsLastSibling();
         (chessEngine.isWhiteMove ? whiteBoardPiecesTransform : blackBoardPiecesTransform).SetAsLastSibling();
         
     }
-    public void getMoveCount()
-    {
-        Debug.Log(moves.Length);
-        string content = "";
-        string filePath = Path.Combine(Application.dataPath, "moves.txt");
-        foreach (uint move in moves)
-        {
-            content += Utils.convertBoardIndexToChessNotation(Move.GetSourceSquare(move)) + Utils.convertBoardIndexToChessNotation(Move.GetTargetSquare(move)) + Utils.pieceToString[Move.GetPromotionPiece(move)] +" 1"+"\n";
-        }
-        File.WriteAllText(filePath, content);
-    }
-    public void makeMove(uint move)
+    //public void getMoveCount()
+    //{
+    //    Debug.Log(moves.Length);
+    //    string content = "";
+    //    string filePath = Path.Combine(Application.dataPath, "moves.txt");
+    //    foreach (ushort move in moves)
+    //    {
+    //        content += Utils.convertBoardIndexToChessNotation(Move.GetSourceSquare(move)) + Utils.convertBoardIndexToChessNotation(Move.GetTargetSquare(move)) + Utils.pieceToString[Move.GetPromotionPiece(move)] +" 1"+"\n";
+    //    }
+    //    File.WriteAllText(filePath, content);
+    //}
+    public void makeMove(ushort move)
     {
         int startSquare = Move.GetSourceSquare(move);
         int endSquare = Move.GetTargetSquare(move);
@@ -100,13 +107,19 @@ public class ManageBoard : MonoBehaviour
         }
         pieces[endSquare] = pieces[startSquare];
         pieces[startSquare] = null;
-        if (Move.GetPromotionPiece(move) != Piece.none)
+        int movePiece = chessEngine.GetPiece(startSquare);
+        bool isWhite = movePiece < 6;
+        bool isPieceKing = (movePiece == Piece.whiteKing || movePiece == Piece.blackKing);
+        bool didPieceMoveMoreThanOneSquareAway =
+            (Math.Abs(startSquare - endSquare) == 2 || Math.Abs(startSquare - endSquare) == 3);
+        bool isCastling = isPieceKing && didPieceMoveMoreThanOneSquareAway;
+        if (Move.GetPromotionPiece(move, isWhite) != Piece.none)
         {
-            pieces[endSquare].SetPiece(Move.GetPromotionPiece(move));
+            pieces[endSquare].SetPiece(Move.GetPromotionPiece(move, isWhite));
         }
-        if (Move.IsCastling(move))
+        if (isCastling)
         {
-            if (Move.IsWhite(move))
+            if (isWhite)
             {
                 if (endSquare == 58)
                 {
@@ -137,14 +150,16 @@ public class ManageBoard : MonoBehaviour
                 }
             }
         }
-        if (Move.IsEnPassent(move))
+        bool isPiecePawn = (movePiece == Piece.whitePawn || movePiece == Piece.blackPawn);
+        bool isEnPassent = isPiecePawn && endSquare == chessEngine.GetEnpassentTargetSquare() && endSquare != 64;
+        if (isEnPassent)
         {
-            Destroy(pieces[endSquare + (Move.IsWhite(move) ? 8 : -8)].gameObject);
+            Destroy(pieces[endSquare + (isWhite ? 8 : -8)].gameObject);
         }
         pieces[endSquare].setPosition(endSquare);
         chessEngine.makeMove(move);
         moves = chessEngine.GetCurrentLegalMoves();
-        GameState gameState = chessEngine.getGameState(chessEngine.isWhiteMove);
+        GameState gameState = chessEngine.GetGameState(chessEngine.isWhiteMove);
         if (gameState != GameState.Ongoing)
         {
             switch(gameState) {
@@ -165,15 +180,19 @@ public class ManageBoard : MonoBehaviour
     public void unMakeLastMove()
     {
         if (lastMoves.Count==0) return;
-        uint lastMove = lastMoves.Pop();
+        ushort lastMove = lastMoves.Pop();
         int sourceSquare = Move.GetSourceSquare(lastMove);
         int targetSquare = Move.GetTargetSquare(lastMove);
-        int movePiece = Move.GetPiece(lastMove);
-        int capturePiece = Move.GetCapturedPiece(lastMove);
-        int promotionPiece = Move.GetPromotionPiece(lastMove);
-        bool isWhite = Move.IsWhite(lastMove);
-        bool isEnPassent = Move.IsEnPassent(lastMove);
-        bool isCastling = Move.IsCastling(lastMove);
+        int movePiece = chessEngine.GetPiece(targetSquare);
+        int capturePiece = chessEngine.GetPiece(sourceSquare);
+        bool isWhite = movePiece < 6;
+        bool isPieceKing = (movePiece == Piece.whiteKing || movePiece == Piece.blackKing);
+        bool didPieceMoveMoreThanOneSquareAway =
+            (Math.Abs(sourceSquare - targetSquare) == 2 || Math.Abs(sourceSquare - targetSquare) == 3);
+        bool isCastling = isPieceKing && didPieceMoveMoreThanOneSquareAway;
+        bool isPiecePawn = (movePiece == Piece.whitePawn || movePiece == Piece.blackPawn);
+        bool isEnPassent = isPiecePawn && targetSquare == chessEngine.GetEnpassentTargetSquare() && targetSquare != 64;
+        int promotionPiece = Move.GetPromotionPiece(lastMove,isWhite);
         pieces[sourceSquare] = pieces[targetSquare];
         pieces[targetSquare] = null;
         pieces[sourceSquare].setPosition(sourceSquare);
@@ -249,7 +268,7 @@ public class ManageBoard : MonoBehaviour
     }
     private void engineMakeMove()
     {
-        uint bestMove = chessEngine.getBestMove(chessEngine.isWhiteMove);
+        ushort bestMove = chessEngine.getBestMove(chessEngine.isWhiteMove);
         makeMove(bestMove);
         if (!isGameOver)
         {

@@ -1,7 +1,6 @@
 
 using EngineCore;
-using Unity.Mathematics;
-using UnityEngine;
+using System;
 
 public class Evaluation
 {
@@ -155,6 +154,11 @@ public class Evaluation
         blackEndGameScore = 0;
         phase = 0;
     }
+    float Lerp(float start, float end, float amount)
+    {
+        return start + (end - start) * amount;
+    }
+
     public int FullEvaluation(Board board,bool isWhite)
     {
         int whiteMaterial = 0;
@@ -163,7 +167,7 @@ public class Evaluation
         ulong[] bitboards = board.GetBitboards();
         for (int piece = 0; piece < bitboards.Length; piece++)
         {
-            midgameWeight += phasePoints[piece % 6] * math.countbits(bitboards[piece]);
+            midgameWeight += phasePoints[piece % 6] * BitOperations.PopCount(bitboards[piece]);
         }
         midgameWeight /= 24f;
         float endgameWeight = 1.0f - midgameWeight;
@@ -171,15 +175,15 @@ public class Evaluation
         for (int piece = 0; piece < bitboards.Length; piece++)
         {
             int addEvalAmount = 0;
-            int materialValue = (int)Mathf.Lerp(midGamePieceValues[piece % 6], endGamePieceValues[piece % 6], endgameWeight);
+            int materialValue = (int)Lerp(midGamePieceValues[piece % 6], endGamePieceValues[piece % 6], endgameWeight);
             ulong currBitboard = bitboards[piece];
             while (currBitboard != 0)
             {
-                int pieceSquare = BitScanner.BitScanForward(currBitboard);
+                int pieceSquare = BitOperations.BitScanForward(currBitboard);
                 int tableIndex = pieceSquare;
                 if (piece >= 6) tableIndex ^= 56;
 
-                addEvalAmount += (int)Mathf.Lerp(midGameTables[piece % 6][tableIndex], endGameTables[piece % 6][tableIndex], endgameWeight);
+                addEvalAmount += (int)Lerp(midGameTables[piece % 6][tableIndex], endGameTables[piece % 6][tableIndex], endgameWeight);
                 addEvalAmount += materialValue;
                 currBitboard &= ~(1ul << pieceSquare);
             }
@@ -247,13 +251,13 @@ public class Evaluation
     {
         int weakRank = Utils.GetRank(weakKingSquare);
         int weakFile = Utils.GetFile(weakKingSquare);
-        int weakKingDstToCenterFile = Mathf.Max(3 - weakFile, weakFile - 4);
-        int weakKingDstToCenterRank = Mathf.Max(3 - weakRank, weakRank - 4);
+        int weakKingDstToCenterFile = Math.Max(3 - weakFile, weakFile - 4);
+        int weakKingDstToCenterRank = Math.Max(3 - weakRank, weakRank - 4);
         int weakKingDstToCenter = weakKingDstToCenterFile + weakKingDstToCenterRank;
 
         int strongRank = Utils.GetRank(strongKingSquare);
         int strongFile = Utils.GetFile(strongKingSquare);
-        int distBetweenKings = Mathf.Abs(strongRank - weakRank) + Mathf.Abs(strongFile - weakFile);
+        int distBetweenKings = Math.Abs(strongRank - weakRank) + Math.Abs(strongFile - weakFile);
 
         int evaluation = weakKingDstToCenter + (14 - distBetweenKings);
         return (int)(evaluation * 10 * endgameWeight);
