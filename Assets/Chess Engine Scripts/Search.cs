@@ -1,6 +1,5 @@
 using EngineCore;
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 public class Search
 {
@@ -18,12 +17,17 @@ public class Search
     private float searchTime;
     private bool searchCancelled;
     private Stopwatch stopwatch = new Stopwatch();
+
+    // Upper bound on ply we could ever reach (nominal search depth + a safety margin
+    // for check/promotion extensions). Used to size ply-indexed buffers so extensions
+    // can never push us out of bounds.
+    private const int MaxPly = 128;
+
     private int[][] scoreBuffers;
     private const int MaxQuiescenceDepth = 64; // effectively unreachable in practice, but a safe hard ceiling
     private int[][] qScoreBuffers;
-    private ushort[,] killerMoves = new ushort[2,16]; // Max Search depth, probably never going to get there
+    private ushort[,] killerMoves = new ushort[2, MaxPly];
     private int[,] historyMoves = new int[12, 64];
-    const int million = 1000000;
     private enum TTFlag
     {
         EXACT,
@@ -37,7 +41,7 @@ public class Search
         public int evaluation;
         public int depth;
         public TTFlag flag;
-        public TTEntry(ushort bestMove, ulong key, int evaluation, int depth,TTFlag flag)
+        public TTEntry(ushort bestMove, ulong key, int evaluation, int depth, TTFlag flag)
         {
             this.bestMove = bestMove;
             this.key = key;
@@ -51,18 +55,18 @@ public class Search
     TTEntry[] transpositionTable = new TTEntry[tableSize];
 
 
-    public Search(Board board, MoveGenerator moveGenerator, Evaluation evaluation,float thinkingTime)
+    public Search(Board board, MoveGenerator moveGenerator, Evaluation evaluation, float thinkingTime)
     {
         this.moveGenerator = moveGenerator;
         this.board = board;
         this.evaluation = evaluation;
         searchTime = thinkingTime;
     }
-public void SetSearchTime(float ms)
-{
-    searchTime = ms;
-}
-    private int getMoveOrderScoreGuess(ushort move,bool isWhite)
+    public void SetSearchTime(float ms)
+    {
+        searchTime = ms;
+    }
+    private int getMoveOrderScoreGuess(ushort move, bool isWhite)
     {
         int moveScoreGuess = 0;
         int sourceSquare = Move.GetSourceSquare(move);
@@ -72,13 +76,13 @@ public void SetSearchTime(float ms)
         int promotionPiece = Move.GetPromotionPiece(move, isWhite);
         bool opponentCanCapture = (moveGenerator.getAttackingSquares(!isWhite) & (1ul << targetSquare)) != 0;
         bool quietMove = true;
-        if( opponentCanCapture)
+        if (opponentCanCapture)
         {
             moveScoreGuess -= Utils.GetPieceValue(movePiece);
         }
         if (moveCapturePiece != Piece.none)
         {
-            moveScoreGuess += 10*Utils.GetPieceValue(moveCapturePiece) - Utils.GetPieceValue(movePiece);
+            moveScoreGuess += 10 * Utils.GetPieceValue(moveCapturePiece) - Utils.GetPieceValue(movePiece);
             quietMove = false;
 
         }
@@ -89,7 +93,7 @@ public void SetSearchTime(float ms)
         }
         if (quietMove)
         {
-            moveScoreGuess += historyMoves[movePiece,targetSquare];
+            moveScoreGuess += historyMoves[movePiece, targetSquare];
         }
         return moveScoreGuess;
     }
@@ -101,8 +105,8 @@ public void SetSearchTime(float ms)
         bestEvaluation = 0;
         positionsSearched = 0;
         searchCancelled = false;
-        scoreBuffers = new int[depth+1][];
-        for(int i = 0; i < scoreBuffers.Length; i++)
+        scoreBuffers = new int[MaxPly][];
+        for (int i = 0; i < scoreBuffers.Length; i++)
         {
             scoreBuffers[i] = new int[218];
         }
@@ -111,11 +115,11 @@ public void SetSearchTime(float ms)
             qScoreBuffers[i] = new int[218];
         stopwatch.Restart();
         int searchedDepth = 0;
-        for (int currentSearchDepth = 1; currentSearchDepth <= depth; currentSearchDepth++)
+        for (int currentSearchDepth = 1; currentSearchDepth <= 64; currentSearchDepth++) // With iterative deepening, there should be no max search depth cap
         {
             bestMoveThisIteration = 0;
             bestEvaluationThisIteration = 0;
-            MinMaxSearch(currentSearchDepth, currentSearchDepth, -maxEval, maxEval, isWhite);
+            MinMaxSearch(currentSearchDepth, 0, currentSearchDepth, -maxEval, maxEval, isWhite, 0, 0);
             searchedDepth = currentSearchDepth;
             if (searchCancelled) break;
             if (bestMoveThisIteration != 0)
@@ -124,16 +128,16 @@ public void SetSearchTime(float ms)
                 bestEvaluation = bestEvaluationThisIteration;
             }
         }
-        UnityEngine.Debug.Log("Searched " + positionsSearched + " positions in " + searchTime + "ms");
+        //UnityEngine.Debug.Log("Searched " + positionsSearched + " positions in " + searchTime + "ms");
         return bestMove;
     }
-    private int probeHash(int depth, int alpha, int beta,ulong zobristHash,ulong zobristIndex, out ushort ttMove)
+    private int probeHash(int depth, int alpha, int beta, ulong zobristHash, ulong zobristIndex, out TTEntry ttEntry)
     {
-        ttMove = 0;
+        ttEntry = null;
         TTEntry entry = transpositionTable[zobristIndex];
-        if (entry != null &&entry.key == zobristHash)
+        if (entry != null && entry.key == zobristHash)
         {
-            ttMove = entry.bestMove;
+            ttEntry = entry;
             if (entry.depth >= depth)
             {
                 switch (entry.flag)
@@ -154,13 +158,11 @@ public void SetSearchTime(float ms)
                         break;
                 }
             }
-            // Remember the best move here for iterative deepening in the future. Currently that doesn't exist yet so we'll ignore it for now
         }
         return probeFailed;
     }
-    private void ScoreMoves(ushort[] moves, int moveCount, int[] scores, ushort ttMove, int depth, int currentSearchDepth, bool isWhite)
+    private void ScoreMoves(ushort[] moves, int moveCount, int[] scores, ushort ttMove, int ply, int currentSearchDepth, bool isRoot, bool isWhite)
     {
-        bool isRoot = depth == currentSearchDepth;
         for (int i = 0; i < moveCount; i++)
         {
             ushort move = moves[i];
@@ -168,16 +170,16 @@ public void SetSearchTime(float ms)
                 scores[i] = int.MaxValue;
             else if (move == ttMove)
                 scores[i] = int.MaxValue - 1;
-            else if (killerMoves[0,depth] == move)
+            else if (killerMoves[0, ply] == move)
                 scores[i] = 99;
-            else if (killerMoves[0,depth] == move)
+            else if (killerMoves[1, ply] == move)
                 scores[i] = 98;
             else
                 scores[i] = getMoveOrderScoreGuess(move, isWhite);
         }
     }
 
-    // Selects the best-scoring move among moves[currentIndex..moveCount) and swaps it to currentIndex
+    // Selects the best-scoring move among moves and swaps it to currentIndex
     private void PickMove(ushort[] moves, int[] scores, int moveCount, int currentIndex)
     {
         int bestIdx = currentIndex;
@@ -196,37 +198,65 @@ public void SetSearchTime(float ms)
             (scores[currentIndex], scores[bestIdx]) = (scores[bestIdx], scores[currentIndex]);
         }
     }
-    private int MinMaxSearch(int depth, int currentSearchDepth, int alpha, int beta, bool isWhite)
+    private int MinMaxSearch(int depth, int ply, int currentSearchDepth, int alpha, int beta, bool isWhite, int numExtensions, ushort excludedMove)
     {
         if (stopwatch.ElapsedMilliseconds > searchTime) searchCancelled = true;
         if (searchCancelled) return 0; // value irrelevant, caller must never use it
-
+        bool isRoot = ply == 0;
+        if (!isRoot && board.GetPositionCount(board.getZobristHash()) >= 2) return 0;
         positionsSearched++;
         ushort[] currentLegalMoves = moveGenerator.generateMoves(isWhite);
         int currentMoveIndex = moveGenerator.getMoveIndex();
         ulong zobristHash = board.getZobristHash();
         ulong zobristIndex = zobristHash & (tableSize - 1);
-
-        int hashResult = probeHash(depth, alpha, beta, zobristHash, zobristIndex, out ushort ttMove);
-        if (hashResult != probeFailed && depth != currentSearchDepth)
+        // Check TT table
+        int hashResult = probeHash(depth, alpha, beta, zobristHash, zobristIndex, out TTEntry ttEntry);
+        if (hashResult != probeFailed && !isRoot && excludedMove == 0)
             return hashResult;
-
+        bool inCheck = moveGenerator.isInCheck(isWhite);
+        // If there's no legal moves
         if (currentMoveIndex == 0)
         {
-            if (moveGenerator.isInCheck(isWhite))
-                return -checkmateEval * depth;
+            // Checkmate
+            if (inCheck)
+                return -checkmateEval + ply;
+            // Stalemate
             return 0;
         }
-
+        // Quiescence Search
         if (depth == 0)
         {
             int val = QuiescenceSearch(alpha, beta, isWhite);
-            transpositionTable[zobristIndex] = new TTEntry(0, zobristHash, val, depth, TTFlag.EXACT);
+            if (excludedMove == 0)
+                transpositionTable[zobristIndex] = new TTEntry(0, zobristHash, val, depth, TTFlag.EXACT);
             return val;
         }
+        int staticEval = evaluation.GetEvaluation(board, isWhite);
 
-        int[] scores = scoreBuffers[depth];
-        ScoreMoves(currentLegalMoves, currentMoveIndex, scores, ttMove, depth, currentSearchDepth, isWhite);
+        // Reverse Futility Pruning
+        if (!inCheck && depth <= 3 && !isRoot
+            && beta < checkmateEval - ply && beta > -checkmateEval + ply)
+        {
+            int margin = 75 * depth + 50;
+            if (staticEval - margin >= beta)
+                return beta;
+        }
+
+        // Null move pruning
+        if (!inCheck && depth >= 3 && board.HasNonPawnPieces(isWhite))
+        {
+            const int R = 2;
+            board.makeNullMove();
+            int nullEval = -MinMaxSearch(depth - 1 - R, ply + 1, currentSearchDepth, -beta, -beta + 1, !isWhite, numExtensions, excludedMove);
+            board.unMakeNullMove();
+
+            if (searchCancelled) return 0;
+            if (nullEval >= beta) return beta;
+        }
+
+        // Move ordering
+        int[] scores = scoreBuffers[ply];
+        ScoreMoves(currentLegalMoves, currentMoveIndex, scores, ttEntry == null ? (ushort)0 : ttEntry.bestMove, ply, currentSearchDepth, isRoot, isWhite);
 
         TTFlag hashFlag = TTFlag.ALPHA;
         ushort bestMoveForNode = 0;
@@ -235,50 +265,114 @@ public void SetSearchTime(float ms)
         {
             PickMove(currentLegalMoves, scores, currentMoveIndex, i);
             ushort currentMove = currentLegalMoves[i];
+            if (currentMove == excludedMove) continue;
+            bool isCapture = board.GetPiece(Move.GetTargetSquare(currentMove)) != Piece.none;
+            bool isPromotion = Move.HasPromotion(currentMove);
+            // Futility Pruning
+            if (!inCheck && !isCapture && !isPromotion && depth == 1)
+            {
+                int futilityMargin = 100;
+                if (staticEval + futilityMargin <= alpha)
+                {
+                    continue;
+                }
+            }
+            // Singular move extension
+            int moveExtension = 0;
+            bool isSingularCandidate =
+                !isRoot &&
+                excludedMove == 0 &&
+                ttEntry != null &&
+                currentMove == ttEntry.bestMove &&
+                depth >= 8 &&
+                ttEntry.depth >= depth - 3 &&
+                ttEntry.flag != TTFlag.ALPHA &&
+                Math.Abs(ttEntry.evaluation) < checkmateEval - MaxPly;
+
+            if (isSingularCandidate)
+            {
+                int margin = 20 + 2 * depth;
+                int singularBeta = ttEntry.evaluation - margin;
+
+                int singularDepth = depth - 3;
+
+                int singularScore = MinMaxSearch(singularDepth, ply, currentSearchDepth,
+                    singularBeta - 1, singularBeta, isWhite, numExtensions, currentMove);
+
+                if (searchCancelled) return 0;
+
+                if (singularScore < singularBeta)
+                {
+                    if (numExtensions < 3)
+                        moveExtension = 1;
+                }
+            }
 
             board.makeMove(currentMove);
-            int eval = -MinMaxSearch(depth - 1, currentSearchDepth, -beta, -alpha, !isWhite);
+            int targetSquare = Move.GetTargetSquare(currentMove);
+            // Late move reduction
+            int eval;
+            bool givesCheck = moveGenerator.isInCheck(!isWhite);
+            bool canReduce = i >= 3 && depth >= 3 && moveExtension == 0 && !isCapture && !isPromotion && !inCheck && !givesCheck;
+            if (canReduce)
+            {
+                int reduceDepth = 1;
+                eval = -MinMaxSearch(depth - 1 - reduceDepth, ply + 1, currentSearchDepth, -alpha - 1, -alpha, !isWhite, numExtensions, excludedMove);
+                if (eval > alpha && !searchCancelled)
+                    eval = -MinMaxSearch(depth - 1, ply + 1, currentSearchDepth, -beta, -alpha, !isWhite, numExtensions, excludedMove);
+            }
+            else
+            {
+                eval = -MinMaxSearch(depth - 1 + moveExtension, ply + 1, currentSearchDepth, -beta, -alpha, !isWhite, numExtensions + moveExtension, excludedMove);
+            }
             board.unMakeMove(currentMove);
 
             if (searchCancelled) return 0;
-
+            // Alpha cutoff
             if (eval > alpha)
             {
                 alpha = eval;
                 hashFlag = TTFlag.EXACT;
                 bestMoveForNode = currentMove;
-                if (depth == currentSearchDepth)
+                if (isRoot)
                 {
                     bestMoveThisIteration = currentMove;
                     bestEvaluationThisIteration = eval;
                 }
             }
+            // If move is not gonna be a singular move competitor, prune the branch
+            if (excludedMove != 0 && eval >= beta)
+            {
+                return eval;
+            }
             if (eval >= beta)
             {
-                transpositionTable[zobristIndex] = new TTEntry(currentMove, zobristHash, beta, depth, TTFlag.BETA);
-                bool isCapture = board.GetPiece(Move.GetTargetSquare(currentMove)) != Piece.none;
-                bool isPromotion = Move.HasPromotion(currentMove);
+                if (excludedMove == 0)
+                    transpositionTable[zobristIndex] = new TTEntry(currentMove, zobristHash, beta, depth, TTFlag.BETA);
+
                 if (!isCapture && !isPromotion)
                 {
-                    if (killerMoves[0, depth] != currentMove)
+                    // Store killer move
+                    if (killerMoves[0, ply] != currentMove)
                     {
-                        killerMoves[1, depth] = killerMoves[0, depth];
-                        killerMoves[0, depth] = currentMove;
+                        killerMoves[1, ply] = killerMoves[0, ply];
+                        killerMoves[0, ply] = currentMove;
                     }
 
                     int movePiece = board.GetPiece(Move.GetSourceSquare(currentMove));
-                    int targetSquare = Move.GetTargetSquare(currentMove);
                     historyMoves[movePiece, targetSquare] += depth * depth;
                 }
                 return beta;
             }
         }
-
-        transpositionTable[zobristIndex] = new TTEntry(bestMoveForNode, zobristHash, alpha, depth, hashFlag);
+        if (excludedMove == 0)
+            transpositionTable[zobristIndex] = new TTEntry(bestMoveForNode, zobristHash, alpha, depth, hashFlag);
         return alpha;
     }
     private int QuiescenceSearch(int alpha, int beta, bool isWhite, int qPly = 0)
     {
+        if (stopwatch.ElapsedMilliseconds > searchTime) searchCancelled = true;
+        if (searchCancelled) return alpha;
         int standPat = evaluation.GetEvaluation(board, isWhite);
         if (standPat >= beta) return beta;
         if (standPat > alpha) alpha = standPat;
@@ -286,8 +380,7 @@ public void SetSearchTime(float ms)
         ushort[] captures = moveGenerator.generateCaptures(isWhite);
         int captureCount = moveGenerator.getMoveIndex();
 
-        // Safety valve: if we somehow blow past the cap, fall back to a local array
-        // rather than corrupting/overrunning a shared buffer.
+        // Safety valve: if we somehow blow past the cap, fall back to a local array rather than corrupting/overrunning a shared buffer.
         int[] scores = qPly < MaxQuiescenceDepth ? qScoreBuffers[qPly] : new int[captureCount];
 
         for (int i = 0; i < captureCount; i++)

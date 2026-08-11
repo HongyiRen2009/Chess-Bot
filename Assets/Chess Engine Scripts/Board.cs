@@ -19,9 +19,12 @@ public class Board
     private Stack<int> enPassantHistory = new Stack<int>();
     private Stack<uint> castleRightsHistory = new Stack<uint>();
     private Stack<int> capturePieceHistory = new Stack<int>();
+    private Dictionary<ulong, int> positionCounts = new();
     private ulong zobristHash;
     private Evaluation evaluation;
     public int EnPassentTargetSquare => enPassentTargetSquare;
+    private int whiteNonPawnPieces = 0;
+    private int blackNonPawnPieces = 0;
     public ulong GetRandomULong()
     {
         System.Random random = new System.Random();
@@ -91,6 +94,11 @@ public class Board
     {
         return zobristHash;
     }
+    public int GetPositionCount(ulong hash)
+    {
+        if (!positionCounts.ContainsKey(hash)) return 0;
+        return positionCounts[hash];
+    }
 
     private void AddPiece(int piece, int square)
     {
@@ -99,6 +107,17 @@ public class Board
         zobristHash ^= zobristTable[square, piece];
         piecesBoard[square] = piece;
         evaluation.UpdateEvaluation(this, piece, true, square);
+        if (Utils.GetPieceValue(piece) > 100)
+        {
+            if (piece < 6)
+            {
+                whiteNonPawnPieces++;
+            }
+            else
+            {
+                blackNonPawnPieces++;
+            }
+        }
     }
     private void RemovePiece(int piece, int square)
     {
@@ -107,6 +126,21 @@ public class Board
         zobristHash ^= zobristTable[square, piece];
         piecesBoard[square] = Piece.none;
         evaluation.UpdateEvaluation(this, piece, false, square);
+        if (Utils.GetPieceValue(piece) > 100)
+        {
+            if (piece < 6)
+            {
+                whiteNonPawnPieces--;
+            }
+            else
+            {
+                blackNonPawnPieces--;
+            }
+        }
+    }
+    public bool HasNonPawnPieces(bool isWhite)
+    {
+        return (isWhite ? whiteNonPawnPieces : blackNonPawnPieces) != 0;
     }
     private int addFenCharToBitBoard(int index, char fenChar)
     {
@@ -251,212 +285,232 @@ public class Board
     {
         return piecesBoard[square];
     }
-
+    public void makeNullMove() {
+        enPassantHistory.Push(enPassentTargetSquare);
+        zobristHash ^= zobristSideToMove;
+        XorEnPassant(enPassentTargetSquare);
+        enPassentTargetSquare = 64;
+        whiteToMove = !whiteToMove;
+    }
+    public void unMakeNullMove()
+    {
+        zobristHash ^= zobristSideToMove;
+        XorEnPassant(enPassentTargetSquare);
+        enPassentTargetSquare = enPassantHistory.Pop();
+        XorEnPassant(enPassentTargetSquare);
+        whiteToMove = !whiteToMove;
+    }
     public void makeMove(ushort move)
     {
-        zobristHash ^= zobristCastling[CastlePiecesMoved];
-        XorEnPassant(enPassentTargetSquare);
-        enPassantHistory.Push(enPassentTargetSquare);
-        castleRightsHistory.Push(CastlePiecesMoved);
+            zobristHash ^= zobristCastling[CastlePiecesMoved];
+            XorEnPassant(enPassentTargetSquare);
+            enPassantHistory.Push(enPassentTargetSquare);
+            castleRightsHistory.Push(CastlePiecesMoved);
 
-        int sourceSquare = Move.GetSourceSquare(move);
-        int targetSquare = Move.GetTargetSquare(move);
-        int movePiece = GetPiece(sourceSquare);
-        int capturePiece;
+            int sourceSquare = Move.GetSourceSquare(move);
+            int targetSquare = Move.GetTargetSquare(move);
+            int movePiece = GetPiece(sourceSquare);
 
-        bool isWhite = movePiece < 6;
-        bool isPiecePawn = (movePiece == Piece.whitePawn || movePiece == Piece.blackPawn);
-        bool movedTwoSquaresAway = Math.Abs(sourceSquare - targetSquare) == 16;
-        bool isDoublePawnPush = isPiecePawn && movedTwoSquaresAway;
-        bool isEnPassent = isPiecePawn && targetSquare == enPassentTargetSquare && targetSquare != 64;
+            int capturePiece;
 
-        if (isEnPassent)
-        {
-            capturePiece = GetPiece(enPassentTargetSquare + (isWhite ? 8 : -8));
-        }
-        else
-        {
-            capturePiece = GetPiece(targetSquare);
-        }
-        capturePieceHistory.Push(capturePiece);
+            bool isWhite = movePiece < 6;
+            bool isPiecePawn = (movePiece == Piece.whitePawn || movePiece == Piece.blackPawn);
+            bool movedTwoSquaresAway = Math.Abs(sourceSquare - targetSquare) == 16;
+            bool isDoublePawnPush = isPiecePawn && movedTwoSquaresAway;
+            bool isEnPassent = isPiecePawn && targetSquare == enPassentTargetSquare && targetSquare != 64;
 
-        int promotionPiece = Move.GetPromotionPiece(move, isWhite);
-
-        bool isPieceKing = (movePiece == Piece.whiteKing || movePiece == Piece.blackKing);
-        bool didPieceMoveMoreThanOneSquareAway =
-            (Math.Abs(sourceSquare - targetSquare) == 2 || Math.Abs(sourceSquare - targetSquare) == 3);
-        bool isCastling = isPieceKing && didPieceMoveMoreThanOneSquareAway;
-
-        switch (movePiece)
-        {
-            case Piece.whiteKing:
-                CastlePiecesMoved |= CastlePiece.whiteKingside | CastlePiece.whiteQueenside;
-                break;
-            case Piece.blackKing:
-                CastlePiecesMoved |= CastlePiece.blackKingside | CastlePiece.blackQueenside;
-                break;
-            case Piece.whiteRook:
-                if (sourceSquare == 56) CastlePiecesMoved |= CastlePiece.whiteQueenside;
-                else if (sourceSquare == 63) CastlePiecesMoved |= CastlePiece.whiteKingside;
-                break;
-            case Piece.blackRook:
-                if (sourceSquare == 0) CastlePiecesMoved |= CastlePiece.blackQueenside;
-                else if (sourceSquare == 7) CastlePiecesMoved |= CastlePiece.blackKingside;
-                break;
-        }
-        enPassentTargetSquare = 64;
-
-        if (isCastling)
-        {
-            if (isWhite)
+            if (isEnPassent)
             {
-                RemovePiece(Piece.whiteKing, sourceSquare);
-                AddPiece(Piece.whiteKing, targetSquare);
+                capturePiece = GetPiece(enPassentTargetSquare + (isWhite ? 8 : -8));
+            }
+            else
+            {
+                capturePiece = GetPiece(targetSquare);
+            }
+            capturePieceHistory.Push(capturePiece);
 
-                if (targetSquare == 58)
+            int promotionPiece = Move.GetPromotionPiece(move, isWhite);
+
+            bool isPieceKing = (movePiece == Piece.whiteKing || movePiece == Piece.blackKing);
+            bool didPieceMoveMoreThanOneSquareAway =
+                (Math.Abs(sourceSquare - targetSquare) == 2 || Math.Abs(sourceSquare - targetSquare) == 3);
+            bool isCastling = isPieceKing && didPieceMoveMoreThanOneSquareAway;
+
+            switch (movePiece)
+            {
+                case Piece.whiteKing:
+                    CastlePiecesMoved |= CastlePiece.whiteKingside | CastlePiece.whiteQueenside;
+                    break;
+                case Piece.blackKing:
+                    CastlePiecesMoved |= CastlePiece.blackKingside | CastlePiece.blackQueenside;
+                    break;
+                case Piece.whiteRook:
+                    if (sourceSquare == 56) CastlePiecesMoved |= CastlePiece.whiteQueenside;
+                    else if (sourceSquare == 63) CastlePiecesMoved |= CastlePiece.whiteKingside;
+                    break;
+                case Piece.blackRook:
+                    if (sourceSquare == 0) CastlePiecesMoved |= CastlePiece.blackQueenside;
+                    else if (sourceSquare == 7) CastlePiecesMoved |= CastlePiece.blackKingside;
+                    break;
+            }
+            enPassentTargetSquare = 64;
+
+            if (isCastling)
+            {
+                if (isWhite)
                 {
-                    RemovePiece(Piece.whiteRook, 56);
-                    AddPiece(Piece.whiteRook, 59);
+                    RemovePiece(Piece.whiteKing, sourceSquare);
+                    AddPiece(Piece.whiteKing, targetSquare);
+
+                    if (targetSquare == 58)
+                    {
+                        RemovePiece(Piece.whiteRook, 56);
+                        AddPiece(Piece.whiteRook, 59);
+                    }
+                    else
+                    {
+                        RemovePiece(Piece.whiteRook, 63);
+                        AddPiece(Piece.whiteRook, 61);
+                    }
                 }
                 else
                 {
-                    RemovePiece(Piece.whiteRook, 63);
-                    AddPiece(Piece.whiteRook, 61);
+                    RemovePiece(Piece.blackKing, sourceSquare);
+                    AddPiece(Piece.blackKing, targetSquare);
+
+                    if (targetSquare == 2)
+                    {
+                        RemovePiece(Piece.blackRook, 0);
+                        AddPiece(Piece.blackRook, 3);
+                    }
+                    else
+                    {
+                        RemovePiece(Piece.blackRook, 7);
+                        AddPiece(Piece.blackRook, 5);
+                    }
                 }
             }
             else
             {
-                RemovePiece(Piece.blackKing, sourceSquare);
-                AddPiece(Piece.blackKing, targetSquare);
+                RemovePiece(movePiece, sourceSquare);
 
-                if (targetSquare == 2)
+                if (capturePiece != Piece.none)
                 {
-                    RemovePiece(Piece.blackRook, 0);
-                    AddPiece(Piece.blackRook, 3);
+                    int enPassentOffset = isEnPassent ? (isWhite ? 8 : -8) : 0;
+                    RemovePiece(capturePiece, targetSquare + enPassentOffset);
+
+                    switch (capturePiece)
+                    {
+                        case Piece.whiteRook:
+                            if (targetSquare == 56) CastlePiecesMoved |= CastlePiece.whiteQueenside;
+                            else if (targetSquare == 63) CastlePiecesMoved |= CastlePiece.whiteKingside;
+                            break;
+                        case Piece.blackRook:
+                            if (targetSquare == 0) CastlePiecesMoved |= CastlePiece.blackQueenside;
+                            else if (targetSquare == 7) CastlePiecesMoved |= CastlePiece.blackKingside;
+                            break;
+                    }
                 }
-                else
-                {
-                    RemovePiece(Piece.blackRook, 7);
-                    AddPiece(Piece.blackRook, 5);
-                }
-            }
-        }
-        else
-        {
-            RemovePiece(movePiece, sourceSquare);
 
-            if (capturePiece != Piece.none)
-            {
-                int enPassentOffset = isEnPassent ? (isWhite ? 8 : -8) : 0;
-                RemovePiece(capturePiece, targetSquare + enPassentOffset);
+                int pieceToPlace = promotionPiece != Piece.none ? promotionPiece : movePiece;
+                AddPiece(pieceToPlace, targetSquare);
 
-                switch (capturePiece)
+                if (isDoublePawnPush)
                 {
-                    case Piece.whiteRook:
-                        if (targetSquare == 56) CastlePiecesMoved |= CastlePiece.whiteQueenside;
-                        else if (targetSquare == 63) CastlePiecesMoved |= CastlePiece.whiteKingside;
-                        break;
-                    case Piece.blackRook:
-                        if (targetSquare == 0) CastlePiecesMoved |= CastlePiece.blackQueenside;
-                        else if (targetSquare == 7) CastlePiecesMoved |= CastlePiece.blackKingside;
-                        break;
+                    enPassentTargetSquare = targetSquare + (isWhite ? 8 : -8);
                 }
             }
 
-            int pieceToPlace = promotionPiece != Piece.none ? promotionPiece : movePiece;
-            AddPiece(pieceToPlace, targetSquare);
+            zobristHash ^= zobristCastling[CastlePiecesMoved];
+            XorEnPassant(enPassentTargetSquare);
+            zobristHash ^= zobristSideToMove;
+            whiteToMove = !whiteToMove;
+            positionCounts[zobristHash] = positionCounts.GetValueOrDefault(zobristHash) + 1;
 
-            if (isDoublePawnPush)
-            {
-                enPassentTargetSquare = targetSquare + (isWhite ? 8 : -8);
-            }
-        }
-
-        zobristHash ^= zobristCastling[CastlePiecesMoved];
-        XorEnPassant(enPassentTargetSquare);
-        zobristHash ^= zobristSideToMove;
-        whiteToMove = !whiteToMove;
     }
 
     public void unMakeMove(ushort move)
     {
-        zobristHash ^= zobristCastling[CastlePiecesMoved];
-        XorEnPassant(enPassentTargetSquare);
-        enPassentTargetSquare = enPassantHistory.Pop();
 
-        int sourceSquare = Move.GetSourceSquare(move);
-        int targetSquare = Move.GetTargetSquare(move);
-        int movePiece = GetPiece(targetSquare);
-        int capturePiece = capturePieceHistory.Count > 0 ? capturePieceHistory.Pop() : Piece.none;
+            ulong hashBeforeUndo = zobristHash;
+            zobristHash ^= zobristCastling[CastlePiecesMoved];
+            XorEnPassant(enPassentTargetSquare);
+            enPassentTargetSquare = enPassantHistory.Pop();
 
-        bool isWhite = movePiece < 6;
-        bool hasPromotion = Move.HasPromotion(move);
-        if (hasPromotion)
-        {
-            movePiece = isWhite ? Piece.whitePawn : Piece.blackPawn;
-        }
+            int sourceSquare = Move.GetSourceSquare(move);
+            int targetSquare = Move.GetTargetSquare(move);
+            int movePiece = GetPiece(targetSquare);
+            int capturePiece = capturePieceHistory.Count > 0 ? capturePieceHistory.Pop() : Piece.none;
 
-        bool isPieceKing = (movePiece == Piece.whiteKing || movePiece == Piece.blackKing);
-        bool didPieceMoveMoreThanOneSquareAway =
-            (Math.Abs(sourceSquare - targetSquare) == 2 || Math.Abs(sourceSquare - targetSquare) == 3);
-        bool isCastling = isPieceKing && didPieceMoveMoreThanOneSquareAway;
-
-        bool isPiecePawn = (movePiece == Piece.whitePawn || movePiece == Piece.blackPawn);
-        bool isEnPassent = isPiecePawn && targetSquare == enPassentTargetSquare && targetSquare != 64;
-
-        if (isCastling)
-        {
-            if (isWhite)
+            bool isWhite = movePiece < 6;
+            bool hasPromotion = Move.HasPromotion(move);
+            if (hasPromotion)
             {
-                RemovePiece(Piece.whiteKing, targetSquare);
-                AddPiece(Piece.whiteKing, sourceSquare);
+                movePiece = isWhite ? Piece.whitePawn : Piece.blackPawn;
+            }
 
-                if (targetSquare == 58)
+            bool isPieceKing = (movePiece == Piece.whiteKing || movePiece == Piece.blackKing);
+            bool didPieceMoveMoreThanOneSquareAway =
+                (Math.Abs(sourceSquare - targetSquare) == 2 || Math.Abs(sourceSquare - targetSquare) == 3);
+            bool isCastling = isPieceKing && didPieceMoveMoreThanOneSquareAway;
+
+            bool isPiecePawn = (movePiece == Piece.whitePawn || movePiece == Piece.blackPawn);
+            bool isEnPassent = isPiecePawn && targetSquare == enPassentTargetSquare && targetSquare != 64;
+
+            if (isCastling)
+            {
+                if (isWhite)
                 {
-                    RemovePiece(Piece.whiteRook, 59);
-                    AddPiece(Piece.whiteRook, 56);
+                    RemovePiece(Piece.whiteKing, targetSquare);
+                    AddPiece(Piece.whiteKing, sourceSquare);
+
+                    if (targetSquare == 58)
+                    {
+                        RemovePiece(Piece.whiteRook, 59);
+                        AddPiece(Piece.whiteRook, 56);
+                    }
+                    else
+                    {
+                        RemovePiece(Piece.whiteRook, 61);
+                        AddPiece(Piece.whiteRook, 63);
+                    }
                 }
                 else
                 {
-                    RemovePiece(Piece.whiteRook, 61);
-                    AddPiece(Piece.whiteRook, 63);
+                    RemovePiece(Piece.blackKing, targetSquare);
+                    AddPiece(Piece.blackKing, sourceSquare);
+
+                    if (targetSquare == 2)
+                    {
+                        RemovePiece(Piece.blackRook, 3);
+                        AddPiece(Piece.blackRook, 0);
+                    }
+                    else
+                    {
+                        RemovePiece(Piece.blackRook, 5);
+                        AddPiece(Piece.blackRook, 7);
+                    }
                 }
             }
             else
             {
-                RemovePiece(Piece.blackKing, targetSquare);
-                AddPiece(Piece.blackKing, sourceSquare);
+                int promotionPiece = hasPromotion ? Move.GetPromotionPiece(move, isWhite) : Piece.none;
+                int pieceToRemove = promotionPiece != Piece.none ? promotionPiece : movePiece;
+                RemovePiece(pieceToRemove, targetSquare);
+                AddPiece(movePiece, sourceSquare);
 
-                if (targetSquare == 2)
+                if (capturePiece != Piece.none)
                 {
-                    RemovePiece(Piece.blackRook, 3);
-                    AddPiece(Piece.blackRook, 0);
-                }
-                else
-                {
-                    RemovePiece(Piece.blackRook, 5);
-                    AddPiece(Piece.blackRook, 7);
+                    int enPassentOffset = isEnPassent ? (isWhite ? 8 : -8) : 0;
+                    AddPiece(capturePiece, targetSquare + enPassentOffset);
                 }
             }
-        }
-        else
-        {
-            int promotionPiece = hasPromotion ? Move.GetPromotionPiece(move, isWhite) : Piece.none;
-            int pieceToRemove = promotionPiece != Piece.none ? promotionPiece : movePiece;
-            RemovePiece(pieceToRemove, targetSquare);
-            AddPiece(movePiece, sourceSquare);
 
-            if (capturePiece != Piece.none)
-            {
-                int enPassentOffset = isEnPassent ? (isWhite ? 8 : -8) : 0;
-                AddPiece(capturePiece, targetSquare + enPassentOffset);
-            }
-        }
-
-        CastlePiecesMoved = castleRightsHistory.Pop();
-        zobristHash ^= zobristCastling[CastlePiecesMoved];
-        XorEnPassant(enPassentTargetSquare);
-        zobristHash ^= zobristSideToMove;
-        whiteToMove = !whiteToMove;
+            CastlePiecesMoved = castleRightsHistory.Pop();
+            zobristHash ^= zobristCastling[CastlePiecesMoved];
+            XorEnPassant(enPassentTargetSquare);
+            zobristHash ^= zobristSideToMove;
+            whiteToMove = !whiteToMove;
+            positionCounts[hashBeforeUndo]--;
     }
 }

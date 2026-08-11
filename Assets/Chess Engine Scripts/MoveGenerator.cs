@@ -470,6 +470,21 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
         ulong kingBitboard = board.GetBitboard(Piece.uncoloredKing, isWhite);
         return (attackerBitboard & kingBitboard) != 0;
     }
+    private bool enPassantExposesKing(bool isWhite, int sourceSquare, int capturedPawnSquare)
+    {
+        int kingSquare = BitOperations.BitScanForward(board.GetBitboard(Piece.uncoloredKing, isWhite));
+        if (kingSquare / 8 != sourceSquare / 8) return false; // not same rank, can't be this case
+
+        ulong blockers = board.GetAllPiecesBitboard();
+        blockers &= ~(1ul << sourceSquare);
+        blockers &= ~(1ul << capturedPawnSquare);
+
+        ulong enemyRooksQueens = board.GetBitboard(Piece.uncoloredRook, !isWhite)
+                                | board.GetBitboard(Piece.uncoloredQueen, !isWhite);
+
+        ulong kingRayAttacks = computeRookMoves(kingSquare, blockers);
+        return (kingRayAttacks & enemyRooksQueens) != 0;
+    }
     private void generatePinMask(bool isWhite)
     {
         int kingSquare = BitOperations.BitScanForward(board.GetBitboard(Piece.uncoloredKing, isWhite));
@@ -480,7 +495,7 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
             {
                 int pinningPieceSquare = BitOperations.BitScanForward(pinningPiecesCandidates[i]);
                 ulong squaresBetweenPieceAndKing = squaresBetween[pinningPieceSquare, kingSquare];
-                ulong pinnedPiecesMask = squaresBetweenPieceAndKing & board.GetAllBlockersBitboard(isWhite);
+                ulong pinnedPiecesMask = squaresBetweenPieceAndKing & board.GetAllBlockersBitboard(!isWhite);
                 if (BitOperations.PopCount(pinnedPiecesMask) == 1) // If the number of blockers is 1, then that piece is pinned
                 {
                     int pinnedSquare = BitOperations.BitScanForward(pinnedPiecesMask);
@@ -613,12 +628,23 @@ new ulong[] {256ul, 64512ul, 2ul, 144680345676152832ul, 1ul, 4ul, 65536ul, 92414
                     ulong pinMask = getPinMask(sourceSquare);
                     currentPawnMoveBitboard &= ~(1ul << targetSquare);
                     if ((pinMask & (1ul << targetSquare)) == 0) continue;
-                    if ((checkMask & (1ul << targetSquare)) == 0) continue;
                     bool isEnpassent = targetSquare == board.GetEnpassentTargetSquare();
                     int capturePiece = board.GetPiece(targetSquare);
                     if (isEnpassent)
                     {
-                        capturePiece = board.GetPiece(targetSquare + (isWhite ? 8 : -8));
+                        int capturedPawnSquare = targetSquare + (isWhite ? 8 : -8);
+                        capturePiece = board.GetPiece(capturedPawnSquare);
+
+                        if (enPassantExposesKing(isWhite, sourceSquare, capturedPawnSquare))
+                            continue;
+
+                        if ((checkMask & (1ul << targetSquare)) == 0 &&
+                            (checkMask & (1ul << capturedPawnSquare)) == 0)
+                            continue;
+                    }
+                    else
+                    {
+                        if ((checkMask & (1ul << targetSquare)) == 0) continue;
                     }
                     if (isPromotion)
                     {

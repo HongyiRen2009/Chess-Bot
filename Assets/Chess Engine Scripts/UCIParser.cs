@@ -53,7 +53,14 @@ public class UciEngine
             case "go":
                 HandleGo(tokens);
                 break;
-
+            case "perft":
+                if(!int.TryParse(tokens[1], out int depth))
+                {
+                    Console.WriteLine("Syntax Error, depth is not an integer");
+                    break;
+                }
+                engine.DoPerftTest(depth);
+                break;
             case "stop":
                 // No async/interruptible search in this engine, so nothing to do.
                 break;

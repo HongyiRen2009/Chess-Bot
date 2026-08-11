@@ -6,6 +6,7 @@ public class ChessEngine
     private MoveGenerator moveGenerator;
     private Evaluation evaluation;
     private Search search;
+    private NonUnityPerftTester nonUnityPerftTester;
     public bool isWhiteMove = true;
     private int depthToSearchTo;
     private float thinkingTimeInMilliseconds = 1000f;
@@ -55,9 +56,14 @@ public class ChessEngine
         board = new Board(evaluation);
         moveGenerator = new MoveGenerator(board);
         search = new Search(board, moveGenerator, evaluation, thinkingTimeInMilliseconds);
+        nonUnityPerftTester = new NonUnityPerftTester(board, MoveGenerator);
         isWhiteMove = board.convertFenStringToBitBoard(fenStartingPosition);
         moveGenerator.generateMoves(isWhiteMove);
 
+    }
+    public void DoPerftTest(int depth)
+    {
+        nonUnityPerftTester.PerftTest(depth, isWhiteMove);
     }
     public GameState GetGameState(bool isWhite)
     {

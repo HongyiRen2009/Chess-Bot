@@ -21,6 +21,7 @@ public class PerftTester
     }
     public void PerftTest(int depthToSearchTo,bool isWhiteMove)
     {
+        outputDepth = depthToSearchTo;
         if (depthToSearchTo == 0) return;
         int depth = depthToSearchTo;
         System.Diagnostics.Stopwatch stopwatch = new System.Diagnostics.Stopwatch();
@@ -95,11 +96,11 @@ public class PerftTester
                 ? 1
                 : SearchMoves(currentDepth - 1, !isWhite);
 
-            //if (currentDepth == outputDepth)
-            //{
-            //    string key = Utils.convertBoardIndexToChessNotation(Move.GetSourceSquare(currentLegalMoves[i])) + Utils.convertBoardIndexToChessNotation(Move.GetTargetSquare(currentLegalMoves[i])) + Utils.pieceToString[Move.GetPromotionPiece(currentLegalMoves[i])];
-            //    movesAfterMove[key] = currentNumberOfMoves;
-            //}
+            if (currentDepth == outputDepth)
+            {
+                string key = Utils.convertBoardIndexToChessNotation(Move.GetSourceSquare(currentLegalMoves[i])) + Utils.convertBoardIndexToChessNotation(Move.GetTargetSquare(currentLegalMoves[i])) + Utils.pieceToString[Move.GetPromotionPiece(currentLegalMoves[i], Move.GetTargetSquare(currentLegalMoves[i])<32)];
+                movesAfterMove[key] = currentNumberOfMoves;
+            }
 
             numberOfMoves += currentNumberOfMoves;
             board.unMakeMove(currentLegalMoves[i]);

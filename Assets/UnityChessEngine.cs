@@ -53,7 +53,7 @@ public class UnityChessEngine : MonoBehaviour
         chessEngine = new ChessEngine();
         chessEngine.InitializeEngine(fenStartingPosition, depthToSearchTo, thinkingTimeInMilliseconds);
         perftTester = new PerftTester(chessEngine.Board, chessEngine.MoveGenerator);
-        if (doPerftTest) perftTester.PerftTest(depthToSearchTo, true);
+        if (doPerftTest) perftTester.PerftTest(depthToSearchTo, chessEngine.isWhiteMove);
     }
 
     // Update is called once per frame

@@ -468,10 +468,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 805300a07fbb8e243ac20314f601217d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: '::'
-  fenStartingPosition: 6k1/3q1pp1/pp5p/1r5n/8/1P6/PQR2PPP/6K1 w - - 0 1
+  fenStartingPosition: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
   depthToSearchTo: 4
   doPerftTest: 0
-  thinkingTimeInMilliseconds: 1200
+  thinkingTimeInMilliseconds: 1000
 --- !u!1 &519420028
 GameObject:
   m_ObjectHideFlags: 0
